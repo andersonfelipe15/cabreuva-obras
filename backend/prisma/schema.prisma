@@ -1,0 +1,575 @@
+// Modelo de dados — Sistema de Aprovação de Projetos e Licenciamento
+// Postgres + JSONB para formulários dinâmicos (construtor no-code).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// FUNDAÇÃO: usuários, perfis de permissionamento, setores (Módulo IX)
+// ─────────────────────────────────────────────────────────────
+
+enum PersonType {
+  PF
+  PJ
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  VACATION // Férias
+  TRAVEL // Viagem
+  LEAVE // Licença
+  DISABLED // Desativado
+}
+
+model User {
+  id           String     @id @default(uuid())
+  personType   PersonType @default(PF)
+  name         String
+  lastName     String? // Sobrenome / Nome Fantasia
+  document     String     @unique // CPF ou CNPJ
+  email        String     @unique
+  phone        String?
+  address      String?
+  cargo        String?
+  passwordHash String
+  emailVerified Boolean   @default(false)
+  status       UserStatus @default(ACTIVE)
+  // Redefinição de senha via e-mail (req. 5).
+  resetToken    String?
+  resetTokenExp DateTime?
+  substituteId String? // substituto p/ receber processos quando ausente (req. 13)
+  substitute   User?      @relation("Substitute", fields: [substituteId], references: [id])
+  substituteOf User[]     @relation("Substitute")
+
+  roles        UserRole[]
+  sectors      UserSector[]
+
+  createdProcesses  Process[] @relation("Requester")
+  movements         ProcessMovement[]
+  analyses          Analysis[]
+  emittedDocuments  Document[]
+  dispatches        Dispatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Perfil de permissionamento (Analista, Requerente, Administrador, ou custom).
+// Permissões ficam em array JSONB — configuráveis via interface, sem programação (req. 14-21).
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  permissions String[] // ex.: ["process.protocol", "process.analyze", ...]
+  system      Boolean    @default(false) // perfis pré-configurados de fábrica
+  users       UserRole[]
+  createdAt   DateTime   @default(now())
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Sector {
+  id       String       @id @default(uuid())
+  name     String       @unique
+  users    UserSector[]
+
+  processTypes    ProcessType[]
+  processesInbox  Process[]        @relation("CurrentSector")
+  movementsFrom   ProcessMovement[] @relation("MovementFrom")
+  movementsTo     ProcessMovement[] @relation("MovementTo")
+
+  createdAt DateTime @default(now())
+}
+
+model UserSector {
+  userId   String
+  sectorId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector   Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sectorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// TIPOS DE PROCESSO (assuntos) + formulário dinâmico (JSONB)
+// ─────────────────────────────────────────────────────────────
+
+enum ProcessCategory {
+  EDILICIO
+  USO_SOLO
+  AMBIENTAL
+  SERVICOS_GERAIS
+}
+
+model ProcessType {
+  id               String          @id @default(uuid())
+  code             String          @unique
+  name             String
+  description      String?
+  category         ProcessCategory
+  enabled          Boolean         @default(true)
+  // Exige vínculo a um processo já deferido (ex.: renovação — req. 140-145).
+  requiresLink     Boolean         @default(false)
+  responsibleSectorId String?
+  responsibleSector   Sector?      @relation(fields: [responsibleSectorId], references: [id])
+
+  // Definição do formulário construído no no-code (seções, campos, validações).
+  formDefinition   Json
+  // Checklist da análise técnica, vinculado aos campos do formulário (req. 126-128).
+  analysisChecklist Json?
+  // Modelo do documento oficial emitido (alvará/certidão).
+  documentTemplate Json?
+  // Tipos de despacho habilitados neste assunto (req. 98).
+  dispatchTypeIds  String[]        @default([])
+  // Regras de cálculo automático de taxas (req. 221-222).
+  feeRules         Json?
+  // Nível de acesso do destinatário no protocolo (req. 42-48):
+  // COMPLETO (todas as ações), INTERMEDIARIO (análise/despacho, sem decisão final),
+  // VISUALIZACAO (somente leitura). Lido em tempo de execução → propaga aos processos já abertos.
+  accessLevel      String          @default("COMPLETO")
+  // Ações processuais habilitadas neste assunto (req. 44). Vazio = todas habilitadas.
+  // Chaves: FORWARD, RETURN, DEFER, INDEFER, ARCHIVE.
+  processActions   String[]        @default([])
+  // Perfis autorizados a protocolar este assunto (req. 7). Vazio = qualquer um com a permissão.
+  protocolRoleIds  String[]        @default([])
+  // Gatilhos de integração SIG por evento do processo (req. 181): [{event, integrationId}].
+  triggers         Json?
+  // Autenticação avançada exigida para protocolar este assunto (req. 6):
+  // NONE | ICP (certificado ICP-Brasil) | GOVBR (login gov.br).
+  requiredAuth     String          @default("NONE")
+
+  processes        Process[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// PROCESSOS (instâncias) — Módulo I
+// ─────────────────────────────────────────────────────────────
+
+enum ProcessStatus {
+  DRAFT // rascunho
+  PROTOCOLED // protocolado / novo
+  IN_ANALYSIS // em análise
+  RETURNED // devolvido ao requerente p/ correção
+  DEFERRED // deferido
+  INDEFERRED // indeferido
+  ARCHIVED // encerrado/arquivado
+}
+
+model Process {
+  id            String        @id @default(uuid())
+  number        String        @unique // ex.: 2026/000123
+  processTypeId String
+  processType   ProcessType   @relation(fields: [processTypeId], references: [id])
+
+  requesterId   String
+  requester     User          @relation("Requester", fields: [requesterId], references: [id])
+
+  currentSectorId String?
+  currentSector   Sector?     @relation("CurrentSector", fields: [currentSectorId], references: [id])
+  // Setores com "ciência" do processo — tramitação a múltiplas partes (req. 81).
+  sharedSectorIds String[]    @default([])
+
+  status        ProcessStatus @default(PROTOCOLED)
+
+  // Valores preenchidos no formulário (última versão) — reaproveitáveis (req. 115-118).
+  formData      Json
+  // Quadro de áreas (req. 57-65).
+  areas         Json?
+  // Moderadores autorizados a ver campos sigilosos (req. 66-74).
+  moderatorIds  String[]      @default([])
+  // Bloqueio de edição/card por ação programada (req. 137).
+  locked        Boolean       @default(false)
+
+  // Vínculo entre processos (req. 140-145).
+  linkedToId    String?
+  linkedTo      Process?      @relation("ProcessLink", fields: [linkedToId], references: [id])
+  linkedFrom    Process[]     @relation("ProcessLink")
+
+  movements     ProcessMovement[]
+  analyses      Analysis[]
+  documents     Document[]
+  fees          Fee[]
+  dispatches    Dispatch[]
+  substitutions PlankSubstitution[]
+  acceptances   ProcessAcceptance[]
+  scheduledActions ScheduledAction[]
+
+  protocoledAt  DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum MovementType {
+  PROTOCOL
+  FORWARD // encaminhamento entre setores
+  DISPATCH // despacho
+  RETURN // devolução ao requerente
+  CORRECTION // reapresentação corrigida pelo requerente
+  DECISION // deferimento/indeferimento
+  ARCHIVE
+  IMPORT // importado de sistema legado (req. 179)
+}
+
+model ProcessMovement {
+  id         String       @id @default(uuid())
+  processId  String
+  process    Process      @relation(fields: [processId], references: [id], onDelete: Cascade)
+  type       MovementType
+  userId     String
+  user       User         @relation(fields: [userId], references: [id])
+  fromSectorId String?
+  fromSector   Sector?    @relation("MovementFrom", fields: [fromSectorId], references: [id])
+  toSectorId   String?
+  toSector     Sector?    @relation("MovementTo", fields: [toSectorId], references: [id])
+  content    Json? // texto do despacho, motivo, campos configurados
+  createdAt  DateTime     @default(now())
+}
+
+// Análise técnica por checklist (req. 126-129)
+model Analysis {
+  id         String   @id @default(uuid())
+  processId  String
+  process    Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+  analystId  String
+  analyst    User     @relation(fields: [analystId], references: [id])
+  // Itens do checklist respondidos: [{key,label,ok:boolean,note}]
+  items      Json
+  conclusion String? // parecer conclusivo
+  createdAt  DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// DOCUMENTOS OFICIAIS (Módulo VII) + taxas (req. 215-224)
+// ─────────────────────────────────────────────────────────────
+
+enum DocumentStatus {
+  VALID // vigente
+  SUSPENDED // suspenso
+  CANCELLED // cancelado
+  REVOKED // cassado
+}
+
+model Document {
+  id            String         @id @default(uuid())
+  processId     String
+  process       Process        @relation(fields: [processId], references: [id], onDelete: Cascade)
+  type          String // ex.: "ALVARA_CONSTRUCAO"
+  number        String         @unique
+  validationCode String        @unique // código validador único (req. 192)
+  qrData        String // conteúdo do QR Code (URL de verificação)
+  content       Json // dados renderizados no documento
+  status        DocumentStatus @default(VALID)
+  signed        Boolean        @default(false)
+  filePath      String? // caminho no S3/MinIO quando o PDF for gerado
+  emittedById   String
+  emittedBy     User           @relation(fields: [emittedById], references: [id])
+  signedById    String? // quem assinou (central de assinaturas — req. 204)
+  validUntil    DateTime?
+  isPublic      Boolean        @default(true) // público/privado (req. 194)
+  renewalState  String? // Renovado / Não renovado (req. 157)
+  chancelado    Boolean        @default(false)
+  logs          DocumentLog[]
+  createdAt     DateTime       @default(now())
+}
+
+// Histórico do documento (req. 158, 198, 199, 201).
+model DocumentLog {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     String
+  byId       String
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+enum FeeStatus {
+  AWAITING_PAYMENT // aguardando pagamento
+  PAID // paga
+  CANCELLED // cancelada
+}
+
+model Fee {
+  id          String    @id @default(uuid())
+  processId   String
+  process     Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  description String
+  amount      Decimal   @db.Decimal(12, 2)
+  status      FeeStatus @default(AWAITING_PAYMENT)
+  dueDate     DateTime? // vencimento
+  boletoFile  String? // guia/boleto anexado pelo analista (req. 217-218)
+  proofFile   String? // comprovante anexado pelo requerente (req. 219)
+  createdAt   DateTime  @default(now())
+}
+
+// Substituição de pranchas em processos deferidos (req. 120-125).
+enum SubstitutionStatus {
+  PENDING // aguardando análise
+  REVISION_REQUESTED // revisão solicitada
+  CONFIRMED // substituição confirmada
+  REJECTED // recusada
+}
+
+model PlankSubstitution {
+  id             String             @id @default(uuid())
+  processId      String
+  process        Process            @relation(fields: [processId], references: [id], onDelete: Cascade)
+  requesterId    String
+  fieldKey       String? // qual prancha/campo está sendo substituída
+  oldFileId      String? // arquivo anterior
+  newFileId      String // nova prancha
+  justification  String // justificativa do requerente (req. 120)
+  status         SubstitutionStatus @default(PENDING)
+  decisionReason String? // justificativa da recusa/revisão (req. 122, 125)
+  decidedById    String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// INTEGRAÇÕES EXTERNAS / WEBSERVICES (req. 170-182)
+// ─────────────────────────────────────────────────────────────
+
+enum IntegrationAuth {
+  NONE
+  BASIC
+  OAUTH2
+}
+
+enum IntegrationBody {
+  NONE
+  RAW_JSON
+}
+
+model Integration {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  url         String
+  method      String          @default("GET")
+  authType    IntegrationAuth @default(NONE)
+  // BASIC: {username,password}
+  // OAUTH2: {headerPrefix,grantType,tokenUrl,clientId,clientSecret,username,password,scope,clientAuthType}
+  authConfig  Json?
+  // Headers extras: [{key,value}] — req. 175
+  headers     Json?
+  bodyType    IntegrationBody @default(NONE)
+  body        String? // Raw JSON — req. 174
+  titleProp   String? // propriedade de título — req. 177
+  keyProp     String? // propriedade chave — req. 177
+  enabled     Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// SISOBRA — envio de alvarás/habite-se à Receita (req. 159-169)
+// ─────────────────────────────────────────────────────────────
+
+enum SisobraStatus {
+  GENERATED // gerado com sucesso
+  XML_ERROR // erro no XML (dados faltando)
+  TRANSMITTED // transmitido com sucesso
+  TRANSMISSION_ERROR // erro na transmissão
+}
+
+model SisobraBatch {
+  id             String            @id @default(uuid())
+  referenceMonth String // AAAA-MM (req. 168)
+  createdById    String
+  createdAt      DateTime          @default(now())
+  items          SisobraDocument[]
+}
+
+model SisobraDocument {
+  id            String        @id @default(uuid())
+  batchId       String
+  batch         SisobraBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  documentId    String
+  processNumber String
+  docType       String
+  xml           String
+  sourceData    Json // dados-base para regeração do XML após correção
+  status        SisobraStatus @default(GENERATED)
+  error         String?
+  transmittedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// Histórico de processamento (req. 166, 169).
+model SisobraLog {
+  id          String   @id @default(uuid())
+  batchId     String?
+  documentId  String?
+  action      String
+  result      String
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// ACEITES E PRAZOS/AÇÕES AUTOMÁTICAS (req. 131-138)
+// ─────────────────────────────────────────────────────────────
+
+enum AcceptanceStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model ProcessAcceptance {
+  id          String           @id @default(uuid())
+  processId   String
+  process     Process          @relation(fields: [processId], references: [id], onDelete: Cascade)
+  userId      String
+  status      AcceptanceStatus @default(PENDING)
+  termAccepted Boolean         @default(false)
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+}
+
+model ScheduledAction {
+  id         String   @id @default(uuid())
+  processId  String
+  process    Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+  action     String // DEFER, INDEFER, SEND_ANALYSIS, RETURN, NOTIFY, BLOCK, UNBLOCK
+  dueAt      DateTime
+  reason     String?
+  executed   Boolean  @default(false)
+  executedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+// Arquivo armazenado (disco local ou S3/MinIO).
+model File {
+  id           String   @id @default(uuid())
+  key          String // chave no storage
+  filename     String
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// DESPACHOS EM TIMELINE (req. 95-108)
+// ─────────────────────────────────────────────────────────────
+
+// Tipo de despacho configurável no-code (req. 96-97).
+model DispatchType {
+  id             String     @id @default(uuid())
+  name           String
+  enabled        Boolean    @default(true)
+  // Se pode ser usado pelo requerente (senão, exclusivo interno) — req. 96/100.
+  allowRequester Boolean    @default(false)
+  // Config dos campos: [{key,label,type,required,readonly,options?,acceptExtensions?}]
+  fields         Json
+  // Situações do despacho: [{name,color}] — req. 97.
+  situations     Json?
+  dispatches     Dispatch[]
+  createdAt      DateTime   @default(now())
+}
+
+// Ajuste legal aplicado a um despacho (req. 103).
+enum AdjustmentType {
+  RETIFICACAO
+  REPUBLICACAO
+  ATUALIZACAO
+}
+
+model Dispatch {
+  id             String          @id @default(uuid())
+  processId      String
+  process        Process         @relation(fields: [processId], references: [id], onDelete: Cascade)
+  dispatchTypeId String
+  dispatchType   DispatchType    @relation(fields: [dispatchTypeId], references: [id])
+  authorId       String
+  author         User            @relation(fields: [authorId], references: [id])
+  title          String
+  values         Json
+  situation      String?
+
+  // Retificação / Republicação / Atualização (req. 102-106).
+  adjustmentType AdjustmentType?
+  justification  String?
+  parentId       String?
+  parent         Dispatch?       @relation("DispatchAdjust", fields: [parentId], references: [id])
+  children       Dispatch[]      @relation("DispatchAdjust")
+  // Já sofreu ajuste → bloqueado para novos ajustes (req. 107).
+  adjusted       Boolean         @default(false)
+
+  createdAt      DateTime        @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONVITES de usuários internos/externos (req. 22-25)
+// ─────────────────────────────────────────────────────────────
+model Invitation {
+  id          String   @id @default(uuid())
+  name        String
+  document    String
+  email       String
+  type        String   @default("EXTERNAL") // INTERNAL | EXTERNAL
+  status      String   @default("PENDING") // PENDING | ACCEPTED | CANCELLED
+  token       String   @unique
+  invitedById String
+  sentCount   Int      @default(1)
+  lastSentAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUDITORIA de usuários — histórico diferenciado (req. 26)
+// ─────────────────────────────────────────────────────────────
+model UserAudit {
+  id        String   @id @default(uuid())
+  userId    String // usuário-alvo da ação
+  action    String // CREATED | BLOCKED | UNBLOCKED | STATUS | ...
+  detail    Json?
+  byId      String? // quem executou
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// NOTIFICAÇÕES por e-mail (SMTP) + caixa de saída/auditoria (req. 132)
+// ─────────────────────────────────────────────────────────────
+model Notification {
+  id        String   @id @default(uuid())
+  to        String
+  subject   String
+  body      String
+  event     String // ACCEPTANCE | INVITE | PASSWORD_RESET | SCHEDULED | DECISION | ...
+  processId String?
+  link      String?
+  sent      Boolean  @default(false)
+  simulated Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now())
+}
+
+// Feedback de precisão da extração por IA (req. 209).
+model AiFeedback {
+  id           String   @id @default(uuid())
+  userId       String
+  correct      Boolean
+  note         String?
+  expectedType String?
+  createdAt    DateTime @default(now())
+}

@@ -1,0 +1,298 @@
+import { useCallback, useEffect, useState } from 'react';
+import { api, getToken, uploadFile } from './api';
+
+interface Field {
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  readonly?: boolean;
+  options?: string[];
+  acceptExtensions?: string[];
+}
+interface Situation { name: string; color: string }
+interface DType {
+  id: string;
+  name: string;
+  allowRequester: boolean;
+  fields: Field[];
+  situations?: Situation[];
+}
+interface Dispatch {
+  id: string;
+  title: string;
+  situation?: string | null;
+  values: Record<string, unknown>;
+  adjustmentType?: string | null;
+  justification?: string | null;
+  adjusted: boolean;
+  createdAt: string;
+  dispatchType: { name: string };
+  author: { name: string };
+}
+
+async function openIntegra(processId: string) {
+  const res = await fetch(`/api/processes/${processId}/integra.pdf`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) {
+    alert('Erro ao gerar a íntegra');
+    return;
+  }
+  window.open(URL.createObjectURL(await res.blob()), '_blank');
+}
+
+export function DispatchTimeline({
+  processId,
+  isStaff,
+}: {
+  processId: string;
+  isStaff: boolean;
+}) {
+  const [types, setTypes] = useState<DType[]>([]);
+  const [items, setItems] = useState<Dispatch[]>([]);
+  const [typeId, setTypeId] = useState('');
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [situation, setSituation] = useState('');
+  const [error, setError] = useState('');
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agents, setAgents] = useState<{ id: string; name: string; description: string }[]>([]);
+  const [agentContent, setAgentContent] = useState('');
+  const [agentBusy, setAgentBusy] = useState(false);
+  // Ajuste de despacho com upload + confirmar/cancelar (req. 104).
+  const [adjusting, setAdjusting] = useState<{ id: string; adjustmentType: string } | null>(null);
+  const [adjJust, setAdjJust] = useState('');
+  const [adjFile, setAdjFile] = useState<File | null>(null);
+
+  const load = useCallback(() => {
+    api.get<DType[]>(`/processes/${processId}/dispatch-types`).then(setTypes);
+    api.get<Dispatch[]>(`/processes/${processId}/dispatches`).then(setItems);
+  }, [processId]);
+  useEffect(load, [load]);
+  useEffect(() => {
+    if (agentOpen && agents.length === 0) api.get<any[]>('/ai/agents').then(setAgents).catch(() => {});
+  }, [agentOpen, agents.length]);
+
+  const selected = types.find((t) => t.id === typeId);
+
+  async function runAgent(agentId: string) {
+    setAgentBusy(true); setAgentContent('');
+    try {
+      const r: any = await api.post('/ai/agent/run', { agentId, processId });
+      setAgentContent(r.content ?? '');
+    } catch (e) {
+      setAgentContent('Erro: ' + (e as Error).message);
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+  function applyToDispatch() {
+    if (!selected) { alert('Selecione um tipo de despacho no formulário abaixo.'); return; }
+    const target = selected.fields.find((f) => ['text', 'textarea', 'richtext'].includes(f.type));
+    if (!target) { alert('O tipo selecionado não possui campo de texto.'); return; }
+    setValues((v) => ({ ...v, [target.key]: agentContent }));
+    alert(`Conteúdo aplicado ao campo "${target.label}" do novo despacho.`);
+  }
+
+  async function submit() {
+    setError('');
+    try {
+      await api.post(`/processes/${processId}/dispatches`, {
+        dispatchTypeId: typeId,
+        values,
+        situation: situation || undefined,
+      });
+      setTypeId('');
+      setValues({});
+      setSituation('');
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function advanceStatus(id: string) {
+    try {
+      await api.post(`/dispatches/${id}/advance-status`);
+      load();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
+  async function confirmAdjust() {
+    if (!adjusting) return;
+    setError('');
+    try {
+      let anexo: { fileId: string; filename: string } | undefined;
+      if (adjFile) {
+        const up = await uploadFile(adjFile);
+        anexo = { fileId: up.id, filename: up.filename };
+      }
+      await api.post(`/dispatches/${adjusting.id}/adjust`, {
+        adjustmentType: adjusting.adjustmentType,
+        justification: adjJust,
+        values: anexo ? { anexo } : undefined,
+      });
+      setAdjusting(null); setAdjJust(''); setAdjFile(null);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function renderField(f: Field) {
+    const v = values[f.key];
+    const set = (val: unknown) => setValues((s) => ({ ...s, [f.key]: val }));
+    let control;
+    if (f.type === 'textarea' || f.type === 'richtext') {
+      control = <textarea rows={3} value={(v as string) ?? ''} onChange={(e) => set(e.target.value)} />;
+    } else if (f.type === 'select' || f.type === 'radio') {
+      control = (
+        <select value={(v as string) ?? ''} onChange={(e) => set(e.target.value)}>
+          <option value="">Selecione...</option>
+          {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    } else if (f.type === 'file') {
+      control = (
+        <input type="file" accept={f.acceptExtensions?.map((e) => '.' + e).join(',')}
+          onChange={(e) => set(e.target.files?.[0]?.name ?? '')} />
+      );
+    } else {
+      control = <input value={(v as string) ?? ''} onChange={(e) => set(e.target.value)} />;
+    }
+    return (
+      <div key={f.key} style={{ marginBottom: 8 }}>
+        <label>{f.label}{f.required && <span style={{ color: '#b42318' }}> *</span>}</label>
+        {control}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>Despachos (timeline)</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isStaff && <button onClick={() => setAgentOpen((o) => !o)}>🤖 Agente de IA</button>}
+          <button className="secondary" onClick={() => openIntegra(processId)}>Baixar íntegra (PDF)</button>
+        </div>
+      </div>
+
+      {agentOpen && (
+        <div style={{ border: '1px solid #1f7a3d', borderRadius: 8, padding: 12, marginTop: 10 }}>
+          <h3 style={{ marginTop: 0 }}>Agente de IA — sugestões de análises e tarefas</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {agents.map((a) => (
+              <button key={a.id} className="secondary" title={a.description} disabled={agentBusy} onClick={() => runAgent(a.id)}>
+                {a.name}
+              </button>
+            ))}
+          </div>
+          {agentBusy && <p className="help">Gerando conteúdo com IA...</p>}
+          {agentContent && (
+            <div style={{ marginTop: 10 }}>
+              <textarea rows={8} value={agentContent} onChange={(e) => setAgentContent(e.target.value)} />
+              <div style={{ marginTop: 6 }}>
+                <button onClick={applyToDispatch}>Usar como despacho</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timeline */}
+      <div style={{ marginTop: 12 }}>
+        {items.map((d) => {
+          const sit = selectedSituation(types, d);
+          return (
+            <div key={d.id} style={{ borderLeft: '3px solid #1f7a3d', paddingLeft: 12, marginBottom: 14 }}>
+              <div>
+                <strong>{d.title}</strong>{' '}
+                {d.situation && (
+                  <span className="badge" style={{ background: (sit?.color ?? '#ddd') + '33', color: sit?.color ?? '#333' }}>
+                    {d.situation}
+                  </span>
+                )}
+                {d.adjusted && <span className="badge INDEFERRED"> ajustado</span>}
+              </div>
+              <div className="help">
+                {d.dispatchType.name} · {d.author.name} · {new Date(d.createdAt).toLocaleString('pt-BR')}
+              </div>
+              {Object.entries(d.values ?? {}).map(([k, v]) => (
+                <div key={k} style={{ fontSize: 14 }}>{k}: {String(v ?? '')}</div>
+              ))}
+              {d.adjustmentType && (
+                <div className="help">Ajuste: {d.adjustmentType} — {d.justification}</div>
+              )}
+              {isStaff && !d.adjusted && !d.adjustmentType && (
+                <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {['RETIFICACAO', 'REPUBLICACAO', 'ATUALIZACAO'].map((a) => (
+                    <button key={a} className="secondary" style={{ padding: '4px 8px', fontSize: 12 }}
+                      onClick={() => { setAdjusting({ id: d.id, adjustmentType: a }); setAdjJust(''); setAdjFile(null); }}>{a}</button>
+                  ))}
+                  <button className="secondary" style={{ padding: '4px 8px', fontSize: 12 }}
+                    title="Evoluir para a próxima situação configurada"
+                    onClick={() => advanceStatus(d.id)}>⏭ Avançar status</button>
+                </div>
+              )}
+              {adjusting?.id === d.id && (
+                <div style={{ border: '1px solid #1f7a3d', borderRadius: 6, padding: 8, marginTop: 6 }}>
+                  <strong>{adjusting.adjustmentType}</strong>
+                  <label>Justificativa</label>
+                  <textarea rows={2} value={adjJust} onChange={(e) => setAdjJust(e.target.value)} />
+                  <label>Anexo (opcional)</label>
+                  <input type="file" onChange={(e) => setAdjFile(e.target.files?.[0] ?? null)} />
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    <button style={{ padding: '4px 10px', fontSize: 12 }} disabled={!adjJust.trim()} onClick={confirmAdjust}>Confirmar</button>
+                    <button className="secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setAdjusting(null)}>Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {items.length === 0 && <p className="help">Nenhum despacho ainda.</p>}
+      </div>
+
+      {/* Novo despacho */}
+      {types.length > 0 && (
+        <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 12, marginTop: 8 }}>
+          <h3 style={{ marginTop: 0 }}>Novo despacho</h3>
+          {error && <div className="error">{error}</div>}
+          <label>Tipo de despacho</label>
+          <select value={typeId} onChange={(e) => { setTypeId(e.target.value); setValues({}); setSituation(''); }}>
+            <option value="">Selecione...</option>
+            {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          {selected && (
+            <div style={{ marginTop: 10 }}>
+              {selected.fields.map(renderField)}
+              {selected.situations && selected.situations.length > 0 && (
+                <div>
+                  <label>Situação</label>
+                  <select value={situation} onChange={(e) => setSituation(e.target.value)}>
+                    <option value="">Selecione...</option>
+                    {selected.situations.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ marginTop: 12 }}>
+                <button onClick={submit}>Lançar despacho</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function selectedSituation(types: DType[], d: Dispatch): Situation | undefined {
+  for (const t of types) {
+    const s = t.situations?.find((x) => x.name === d.situation);
+    if (s) return s;
+  }
+  return undefined;
+}
