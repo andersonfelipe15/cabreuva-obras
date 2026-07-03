@@ -6,5 +6,5 @@ backend/certs
 **/*.pfx
 **/*.p12
 **/*.log
-storage
+backend/storage
 .git

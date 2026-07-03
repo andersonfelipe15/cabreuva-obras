@@ -62,7 +62,16 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code} · %{content_type}\\\\n\" \"http://localhost:3999/api/integrations/mock/zoneamento?cep=13315000\")",
       "Bash(kill %1)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('scripts:', JSON.stringify\\(p.scripts,null,1\\)\\); console.log\\('prisma cfg:', JSON.stringify\\(p.prisma||{}\\)\\); console.log\\('has ts-node:', !!\\(p.devDependencies?.['ts-node']||p.dependencies?.['ts-node']\\)\\); console.log\\('has prisma:', !!\\(p.devDependencies?.prisma||p.dependencies?.prisma\\)\\)\")",
-      "Bash(cat ../.gitignore)"
+      "Bash(cat ../.gitignore)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\"])",
+      "Bash(railway whoami *)",
+      "Bash(railway link *)",
+      "Bash(railway status *)",
+      "Bash(railway up *)",
+      "Bash(railway add *)",
+      "Bash(railway domain *)",
+      "Bash(railway variables *)",
+      "Bash(railway logs *)"
     ]
   }
 }
