@@ -44,10 +44,22 @@ export class AuthController {
     return this.auth.loginCertificate(body.pfxBase64, body.password);
   }
 
-  // Auto-cadastro de requerente externo (req. 2) — público.
+  // Auto-cadastro de requerente externo (req. 2-4) — público.
   @Post('register')
   register(@Body() body: any) {
     return this.auth.register(body);
+  }
+
+  // Ativação de conta por e-mail (req. 3) — público.
+  @Post('activate')
+  activate(@Body() body: { token: string }) {
+    return this.auth.activate(body.token);
+  }
+
+  // Reenvio do link de ativação (req. 4) — público.
+  @Post('resend-activation')
+  resendActivation(@Body() body: { email: string }) {
+    return this.auth.resendActivation(body.email);
   }
 
   // Esqueci minha senha (req. 5) — públicos.

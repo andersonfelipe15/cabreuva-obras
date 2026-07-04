@@ -9,6 +9,7 @@ export function Register() {
   const [f, setF] = useState({ name: '', document: '', email: '', phone: '', address: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const set = (k: string, v: string) => setF((s) => ({ ...s, [k]: v }));
 
   async function submit(e: React.FormEvent) {
@@ -16,7 +17,7 @@ export function Register() {
     setError(''); setLoading(true);
     try {
       await register(f);
-      nav('/catalog');
+      setDone(true); // exige confirmação de e-mail antes do acesso (req. 3)
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -28,6 +29,13 @@ export function Register() {
     <div className="container" style={{ maxWidth: 440 }}>
       <div className="card">
         <h1>Criar conta</h1>
+        {done ? (
+          <div className="card" style={{ borderColor: '#16a34a' }}>
+            <p>✅ Cadastro recebido! Enviamos um <strong>link de ativação</strong> para <strong>{f.email}</strong>.</p>
+            <p className="help">Confirme seu e-mail para liberar o acesso (o acesso só é autorizado após a confirmação). Não recebeu? Veja em Spam ou use "Reenviar link" na tela de login.</p>
+            <Link to="/login">Ir para o login</Link>
+          </div>
+        ) : (
         <form onSubmit={submit}>
           <label>Nome / Razão Social</label>
           <input value={f.name} onChange={(e) => set('name', e.target.value)} />
@@ -41,13 +49,14 @@ export function Register() {
           </div>
           <label>Senha</label>
           <input type="password" value={f.password} onChange={(e) => set('password', e.target.value)} />
-          <p className="help">Mín. 8 caracteres, com maiúscula, minúscula e número.</p>
+          <p className="help">Mín. 8 caracteres, com maiúscula, minúscula, número e caractere especial.</p>
           {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
           <div style={{ marginTop: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
             <button disabled={loading || !f.name || !f.document || !f.email || !f.password}>{loading ? 'Criando...' : 'Criar conta'}</button>
             <Link to="/login">Já tenho conta</Link>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

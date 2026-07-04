@@ -51,8 +51,23 @@ export class UsersService {
     const acessados = await this.prisma.processMovement.count({
       where: { userId: id },
     });
+    // Processos atualmente na caixa de entrada dos setores do usuário (req. 10).
+    const sectorIds = user.sectors.map((s) => s.sectorId);
+    const naCaixaEntrada = sectorIds.length
+      ? await this.prisma.process.count({ where: { currentSectorId: { in: sectorIds } } })
+      : 0;
+    // Permissões efetivas (união dos perfis) (req. 10).
+    const permissions = [
+      ...new Set(user.roles.flatMap((ur) => ur.role.permissions)),
+    ];
     const { passwordHash, ...rest } = user;
-    return { ...rest, processosProtocolados: protocolados, processosAcessados: acessados };
+    return {
+      ...rest,
+      permissions,
+      processosNaCaixaEntrada: naCaixaEntrada,
+      processosProtocolados: protocolados,
+      processosAcessados: acessados,
+    };
   }
 
   // Registro de auditoria de usuário (req. 26).

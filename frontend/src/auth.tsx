@@ -15,7 +15,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   loginFederated: (document: string, provider: string) => Promise<void>;
   loginCertificate: (pfxBase64: string, password: string) => Promise<any>;
-  register: (data: Record<string, string>) => Promise<void>;
+  register: (data: Record<string, string>) => Promise<{ pendingConfirmation?: boolean }>;
   switchProfile: (roleId: string) => Promise<void>;
   logout: () => void;
 }
@@ -61,12 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.certificate;
   }
 
-  // Auto-cadastro de requerente externo (req. 2).
+  // Auto-cadastro de requerente externo (req. 2-4). Não loga: exige confirmação de e-mail.
   async function register(data: Record<string, string>) {
-    const res = await api.post<{ accessToken: string; user: SessionUser }>('/auth/register', data);
-    setToken(res.accessToken);
-    localStorage.setItem('user', JSON.stringify(res.user));
-    setUser(res.user);
+    return api.post<{ ok: boolean; pendingConfirmation?: boolean }>('/auth/register', data);
   }
 
   // Troca de perfil ativo sem novo login (req. 15-16).

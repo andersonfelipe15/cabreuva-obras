@@ -71,7 +71,25 @@
       "Bash(railway add *)",
       "Bash(railway domain *)",
       "Bash(railway variables *)",
-      "Bash(railway logs *)"
+      "Bash(railway logs *)",
+      "Bash(curl -s -o /dev/null -w '%{http_code} · %{content_type}\\\\n' https://app-production-f8bf.up.railway.app/)",
+      "Bash(curl -s -o /dev/null -w '%{http_code} · %{content_type}\\\\n' https://app-production-f8bf.up.railway.app/api/process-types/catalog)",
+      "Bash(curl -s -X POST https://app-production-f8bf.up.railway.app/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@cabreuva.sp.gov.br\",\"password\":\"admin123\"}' -w '\\\\nstatus %{http_code}\\\\n')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const l=d.trim\\(\\).split\\('\\\\n'\\);const s=l.pop\\(\\);try{const j=JSON.parse\\(l.join\\('\\\\n'\\)\\);console.log\\('login OK, usuário:', j.user?.name, '| authMethod:', j.user?.authMethod\\)}catch{console.log\\('resposta:', l.join\\(' '\\).slice\\(0,80\\)\\)}console.log\\(s\\)}\\)\")",
+      "Bash(base64 -w0 backend/certs/brito-a1.pfx)",
+      "Bash(railway run *)",
+      "Bash(grep -viE \"MII|[A-Za-z0-9+/]{40,}\")",
+      "Bash(curl -s -X POST https://app-production-f8bf.up.railway.app/api/auth/federated -H 'Content-Type: application/json' -d '{\"document\":\"22222222222\",\"provider\":\"GOVBR\"}')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);console.log\\(j.accessToken?\\('✅ gov.br OK — usuário: '+j.user?.name+' · authMethod: '+j.user?.authMethod+' · simulado: '+j.simulated\\):\\('resposta: '+JSON.stringify\\(j\\)\\)\\)}catch{console.log\\(d.slice\\(0,100\\)\\)}}\\)\")",
+      "Bash(pdftotext -layout \"/c/Users/adm/Downloads/rser2ol3.pdf\" ed.txt)",
+      "Bash(grep -nE \"^\\\\s*[0-9]{1,3}\\\\.\\\\s\" ed.txt)",
+      "Bash(awk 'NR>=1772 && NR<=3300' ed.txt)",
+      "Bash(grep -nE \"^\\\\s*[0-9]{1,3}\\\\.\\\\s+[A-ZÀ-Úa-z]\")",
+      "Bash(iconv -f cp1252 -t utf-8 ed.txt)",
+      "Bash(grep -vE \"^\\\\s*$|Atende|SIM|NÃO|FUNCIONALIDADE\")",
+      "Bash(grep -vE \"^ *$\")",
+      "Bash(awk 'NR>=1785 && NR<=3300' ed.txt)",
+      "Bash(awk '/^ *170\\\\. O sistema dever. possibilitar a configura/{f=1} f{print} /^ *183\\\\./{exit}' ed.txt)"
     ]
   }
 }

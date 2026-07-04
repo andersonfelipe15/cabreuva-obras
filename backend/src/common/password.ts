@@ -7,6 +7,7 @@ export function assertStrongPassword(pw: string) {
   if (!/[a-z]/.test(pw)) problems.push('uma letra minúscula');
   if (!/[A-Z]/.test(pw)) problems.push('uma letra maiúscula');
   if (!/[0-9]/.test(pw)) problems.push('um número');
+  if (!/[^A-Za-z0-9]/.test(pw)) problems.push('um caractere especial');
   if (problems.length) {
     throw new BadRequestException(
       'Senha fraca. Requisitos não atendidos: ' + problems.join(', ') + '.',

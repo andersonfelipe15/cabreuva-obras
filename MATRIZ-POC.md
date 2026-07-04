@@ -16,14 +16,14 @@ Pregão Eletrônico 47/2026 — 224 requisitos. Legenda de status:
 |---|---|---|---|
 | 1 | Contas PF e PJ, protocolo/monitoramento sem restrição | ✅ | `User.personType`, auth |
 | 2 | Formulário de cadastro (Nome/RS, CPF/CNPJ, telefone, endereço, credenciais) | ✅ | `/auth/register` + tela de auto-cadastro (testado) |
-| 3 | Senha forte + validação obrigatória de e-mail | ✅ | `assertStrongPassword` no cadastro/reset/aceite (testado) |
-| 4 | Mensagens claras (e-mail não validado, erro de autenticação) | ✅ | `auth.service.ts` |
+| 3 | Senha forte + validação obrigatória de e-mail | ✅ | senha exige maiúscula/minúscula/número/**especial**; auto-cadastro só libera acesso **após confirmar e-mail** (link de ativação, testado) |
+| 4 | Mensagens claras (e-mail não validado, erro de autenticação) | ✅ | login barra não-confirmado + **reenvio do link de ativação** (`/auth/resend-activation`, testado) |
 | 5 | "Esqueci minha senha" via e-mail | ✅ | `/auth/forgot-password` + `/reset-password` (token, testado) |
 | 6 | Autenticação avançada: certificado ICP-Brasil / gov.br | ✅ | login A1 real (`/auth/certificate`, valida cadeia ICP) + `requiredAuth` por assunto + gov.br federado (testado) |
 | 7 | Processos protocolados só por níveis de permissão configurados | ✅ | `protocolRoleIds` por assunto (perfis) + FormBuilder (testado) |
 | 8 | Tela admin de gestão de usuários + bloqueio | ✅ | `AdminUsers.tsx` (testado) |
 | 9 | Usuário bloqueado vê mensagem no login | ✅ | `auth.service.ts` |
-| 10 | Visão detalhada unificada do usuário | ✅ | `users.detail` (cargo, setores, perfis, protocolados/acessados) |
+| 10 | Visão detalhada unificada do usuário | ✅ | `users.detail`: e-mail, nome, CPF, **telefone, endereço, permissões, processos na caixa de entrada**, setores, perfis, protocolados/acessados (testado) |
 | 11 | Busca por Nome/CPF/E-mail/Cargo | ✅ | `users.list` (com cargo, testado) |
 | 12 | Pré-cadastro com link de confirmação | ✅ | `InvitationsModule` (convite interno + link de aceite, testado) |
 | 13 | Status Férias/Viagem/Licença/Desativado + substituto automático | ✅ | `/users/:id/status` + inbox encaminha ao substituto (testado) |

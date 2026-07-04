@@ -132,9 +132,11 @@ export function AdminUsers() {
         <div className="card">
           <h2>{detail.name}</h2>
           <p className="help">{detail.email} · {detail.document} · {detail.cargo ?? 'sem cargo'} · {detail.status}</p>
+          <p>Telefone: {detail.phone || '—'} · Endereço: {detail.address || '—'}</p>
           <p>Setores: {detail.sectors?.map((s: any) => s.sector.name).join(', ') || '—'}</p>
           <p>Perfis: {detail.roles?.map((r: any) => r.role.name).join(', ') || '—'}</p>
-          <p>Processos protocolados: {detail.processosProtocolados} · Processos acessados: {detail.processosAcessados}</p>
+          <p>Permissões: <span className="help">{detail.permissions?.join(', ') || '—'}</span></p>
+          <p>Processos na caixa de entrada: {detail.processosNaCaixaEntrada ?? 0} · Protocolados: {detail.processosProtocolados} · Acessados: {detail.processosAcessados}</p>
 
           <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 4 }}>
             <h3 style={{ marginTop: 0 }}>Status e substituto (req. 13)</h3>

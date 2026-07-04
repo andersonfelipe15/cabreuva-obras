@@ -22,17 +22,32 @@ export function Login() {
   const [certFile, setCertFile] = useState<File | null>(null);
   const [certPass, setCertPass] = useState('');
 
+  const [needsActivation, setNeedsActivation] = useState(false);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setNeedsActivation(false);
     setLoading(true);
     try {
       await login(email, password);
       nav('/catalog');
     } catch (err) {
-      setError((err as Error).message);
+      const m = (err as Error).message;
+      setError(m);
+      // E-mail não confirmado → oferece reenvio do link de ativação (req. 4).
+      if (/confirmad/i.test(m)) setNeedsActivation(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function resendActivation() {
+    try {
+      await api.post('/auth/resend-activation', { email });
+      alert('Se a conta existir e estiver pendente, reenviamos o link de ativação para o e-mail.');
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -95,6 +110,11 @@ export function Login() {
           <label>Senha</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
+          {needsActivation && (
+            <div style={{ marginTop: 8 }}>
+              <button type="button" className="secondary" onClick={resendActivation}>Reenviar link de ativação</button>
+            </div>
+          )}
           <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
             <button disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
             <button type="button" className="secondary" style={{ padding: '6px 10px', fontSize: 13 }} onClick={forgot}>Esqueci minha senha</button>

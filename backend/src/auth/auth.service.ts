@@ -144,7 +144,9 @@ export class AuthService {
     };
   }
 
-  // ── Auto-cadastro de requerente externo (req. 2) ──────────────
+  // ── Auto-cadastro de requerente externo (req. 2-4) ────────────
+  // Cria a conta como NÃO confirmada e envia link de ativação por e-mail; o
+  // acesso só é liberado após a confirmação (req. 3). Não retorna token.
   async register(dto: { name: string; document: string; email: string; phone?: string; address?: string; password: string }) {
     assertStrongPassword(dto.password);
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -156,6 +158,7 @@ export class AuthService {
       throw new BadRequestException('Já existe um usuário com este documento.');
 
     const role = await this.prisma.role.findFirst({ where: { name: 'Requerente' } });
+    const activationToken = randomUUID();
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
@@ -164,12 +167,48 @@ export class AuthService {
         phone: dto.phone,
         address: dto.address,
         passwordHash: await bcrypt.hash(dto.password, 10),
-        emailVerified: true,
+        emailVerified: false,
+        activationToken,
         roles: role ? { create: [{ roleId: role.id }] } : undefined,
       },
-      include: { roles: { include: { role: true } } },
     });
-    return this.issue(user);
+    await this.sendActivation(user.name, user.email, activationToken);
+    return { ok: true, pendingConfirmation: true };
+  }
+
+  private async sendActivation(name: string, email: string, token: string) {
+    const base = process.env.PUBLIC_URL || 'http://localhost:5173';
+    await this.mail.send({
+      to: email,
+      subject: 'Ative sua conta — Prefeitura de Cabreúva',
+      body: `Olá ${name},\n\nConfirme seu e-mail para ativar o acesso. Clique no link abaixo. Sem essa confirmação, o acesso não é liberado.`,
+      event: 'ACTIVATION',
+      link: `${base}/ativar-conta?token=${token}`,
+    });
+  }
+
+  // Confirmação do e-mail via link (req. 3).
+  async activate(token: string) {
+    const user = await this.prisma.user.findFirst({ where: { activationToken: token } });
+    if (!user) throw new BadRequestException('Link de ativação inválido ou já utilizado.');
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, activationToken: null },
+    });
+    return { ok: true };
+  }
+
+  // Reenvio automático do link de ativação (req. 4). Não revela se o e-mail existe.
+  async resendActivation(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (user && !user.emailVerified) {
+      const token = user.activationToken || randomUUID();
+      if (!user.activationToken) {
+        await this.prisma.user.update({ where: { id: user.id }, data: { activationToken: token } });
+      }
+      await this.sendActivation(user.name, user.email, token);
+    }
+    return { ok: true };
   }
 
   // ── Redefinição de senha via e-mail (req. 5) ──────────────────

@@ -44,6 +44,8 @@ model User {
   // Redefinição de senha via e-mail (req. 5).
   resetToken    String?
   resetTokenExp DateTime?
+  // Ativação de conta por e-mail no auto-cadastro (req. 3-4).
+  activationToken String?
   substituteId String? // substituto p/ receber processos quando ausente (req. 13)
   substitute   User?      @relation("Substitute", fields: [substituteId], references: [id])
   substituteOf User[]     @relation("Substitute")
