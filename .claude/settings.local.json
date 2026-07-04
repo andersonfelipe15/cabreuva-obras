@@ -89,7 +89,10 @@
       "Bash(grep -vE \"^\\\\s*$|Atende|SIM|NÃO|FUNCIONALIDADE\")",
       "Bash(grep -vE \"^ *$\")",
       "Bash(awk 'NR>=1785 && NR<=3300' ed.txt)",
-      "Bash(awk '/^ *170\\\\. O sistema dever. possibilitar a configura/{f=1} f{print} /^ *183\\\\./{exit}' ed.txt)"
+      "Bash(awk '/^ *170\\\\. O sistema dever. possibilitar a configura/{f=1} f{print} /^ *183\\\\./{exit}' ed.txt)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' https://app-production-f8bf.up.railway.app/)",
+      "Bash(curl -s -X POST https://app-production-f8bf.up.railway.app/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@cabreuva.sp.gov.br\",\"password\":\"admin123\"}' -w '\\\\nHTTP %{http_code}\\\\n')",
+      "Bash(xxd)"
     ]
   }
 }

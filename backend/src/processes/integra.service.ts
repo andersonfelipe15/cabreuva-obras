@@ -63,9 +63,10 @@ export class IntegraService {
   // Empacota a íntegra + os documentos emitidos num único ZIP (req. 113).
   async generateZip(processId: string, filter?: ActType[]): Promise<{ buffer: Buffer; filename: string }> {
     const proc = await this.getProc(processId);
+    const safeNumber = String(proc.number).replace(/[^A-Za-z0-9._-]+/g, '-');
     const zip = new JSZip();
     const integraPdf = await this.generate(processId, filter);
-    zip.file(`integra-${proc.number}.pdf`, integraPdf);
+    zip.file(`integra-${safeNumber}.pdf`, integraPdf);
 
     // Inclui os PDFs dos documentos emitidos como anexos, salvo se o filtro os excluir.
     const includeDocs = !filter?.length || filter.includes('DOCUMENTO');
@@ -82,7 +83,7 @@ export class IntegraService {
     }
 
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
-    return { buffer, filename: `integra-${proc.number}.zip` };
+    return { buffer, filename: `integra-${safeNumber}.zip` };
   }
 
   private async getProc(processId: string) {
