@@ -140,10 +140,10 @@ Pregão Eletrônico 47/2026 — 224 requisitos. Legenda de status:
 |---|---|---|---|
 | 95 | Interface de despachos em timeline, distinta da análise | ✅ | `DispatchTimeline.tsx` |
 | 96 | Config de tipos de despacho (nome, uso, habilitar, formulário) | ✅ | `AdminDispatchTypes` builder completo (criar/editar, testado) |
-| 97 | Formulário do tipo via construtor no-code (campos, situações/cores) | ✅ | campos + situações/cores no builder (testado) |
+| 97 | Formulário do tipo via construtor no-code (campos, situações/cores) | ✅ | builder com campos text/textarea/richtext/select/multiselect/number/date/file, situações/cores, editor rich-text (negrito/itálico/sublinhado/listas/link) e extensões por campo de arquivo (testado) |
 | 98 | Escolher tipos habilitados por assunto | ✅ | `dispatchTypeIds` |
 | 99 | Despachos cronológicos conforme tipos | ✅ | `dispatches.service` |
-| 100 | Regras dos campos (situação, extensões, obrigatórios, visibilidade) | ✅ | `dispatches.service` (testado) |
+| 100 | Regras dos campos (situação, extensões, obrigatórios, visibilidade) | ✅ | `dispatches.service` + campos somente-leitura (readonly) e `accept` de extensões aplicados no render (testado) |
 | 101 | Alterar tipo sem afetar despachos já feitos | ✅ | snapshot no despacho |
 | 102 | Criar/retificar/atualizar despachos | ✅ | `adjust` |
 | 103 | Retificação/Republicação/Atualização | ✅ | `AdjustmentType` (testado) |
@@ -160,8 +160,8 @@ Pregão Eletrônico 47/2026 — 224 requisitos. Legenda de status:
 | 109 | Geração da íntegra (capa a capa, cronológica) | ✅ | `integra.service.ts` |
 | 110 | Atos que compõem a íntegra | ✅ | `integra.service` |
 | 111 | Cada ato em folha separada, numerada | ✅ | `integra.service` |
-| 112 | Capa automática (brasão, QR, URL, autuação, data) | ✅ | `integra.service` |
-| 113 | Pré-visualização em tela + escolha de atos + ZIP | ✅ | seleção de atos + `/documents/zip` (jszip, testado) |
+| 112 | Capa automática (brasão, QR, URL, autuação, data) | ✅ | `integra.service`: brasão institucional (escudo), QR apontando para rota de SPA válida (`/process/:id`), nº de autuação e data (testado em produção) |
+| 113 | Pré-visualização em tela + escolha de atos + ZIP | ✅ | painel de seleção de atos por tipo em `DispatchTimeline`, `integra.pdf?acts=` filtra, `integra.zip` empacota íntegra + PDFs dos documentos emitidos (jszip, testado em produção) |
 | 114 | Sem limite de emissões | ✅ | sob demanda |
 
 ## 9. Reaproveitamento e análise de PDF (itens 115–125)
