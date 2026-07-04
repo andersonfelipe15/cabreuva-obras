@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getToken, uploadFile } from './api';
 
 interface Field {
@@ -31,15 +31,24 @@ interface Dispatch {
   author: { name: string };
 }
 
-async function openIntegra(processId: string) {
-  const res = await fetch(`/api/processes/${processId}/integra.pdf`, {
+async function downloadIntegra(processId: string, ext: 'pdf' | 'zip', acts: string[]) {
+  const qs = acts.length ? `?acts=${acts.join(',')}` : '';
+  const res = await fetch(`/api/processes/${processId}/integra.${ext}${qs}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!res.ok) {
     alert('Erro ao gerar a íntegra');
     return;
   }
-  window.open(URL.createObjectURL(await res.blob()), '_blank');
+  const blob = await res.blob();
+  if (ext === 'pdf') {
+    window.open(URL.createObjectURL(blob), '_blank');
+  } else {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `integra-${processId}.zip`;
+    a.click();
+  }
 }
 
 export function DispatchTimeline({
@@ -63,6 +72,10 @@ export function DispatchTimeline({
   const [adjusting, setAdjusting] = useState<{ id: string; adjustmentType: string } | null>(null);
   const [adjJust, setAdjJust] = useState('');
   const [adjFile, setAdjFile] = useState<File | null>(null);
+  // Seleção de atos para a íntegra (req. 113).
+  const [integraOpen, setIntegraOpen] = useState(false);
+  const [actTypes, setActTypes] = useState<{ type: string; label: string; count: number }[]>([]);
+  const [selectedActs, setSelectedActs] = useState<string[]>([]);
 
   const load = useCallback(() => {
     api.get<DType[]>(`/processes/${processId}/dispatch-types`).then(setTypes);
@@ -144,23 +157,42 @@ export function DispatchTimeline({
   function renderField(f: Field) {
     const v = values[f.key];
     const set = (val: unknown) => setValues((s) => ({ ...s, [f.key]: val }));
+    const ro = !!f.readonly; // somente leitura (req. 100 iv)
     let control;
-    if (f.type === 'textarea' || f.type === 'richtext') {
-      control = <textarea rows={3} value={(v as string) ?? ''} onChange={(e) => set(e.target.value)} />;
+    if (f.type === 'richtext') {
+      // Texto avançado com formatações (req. 97): negrito/itálico/sublinhado/lista/link.
+      control = <DispatchRichText html={(v as string) ?? ''} readOnly={ro} onChange={(h) => set(h)} />;
+    } else if (f.type === 'textarea') {
+      control = <textarea rows={3} readOnly={ro} value={(v as string) ?? ''} onChange={(e) => set(e.target.value)} />;
+    } else if (f.type === 'multiselect') {
+      // Seleção múltipla em botões de opção (req. 97).
+      const arr = (v as string[]) ?? [];
+      control = (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {f.options?.map((o) => (
+            <label key={o} style={{ fontWeight: 400 }}>
+              <input type="checkbox" style={{ width: 'auto', marginRight: 4 }} disabled={ro}
+                checked={arr.includes(o)}
+                onChange={(e) => set(e.target.checked ? [...arr, o] : arr.filter((x) => x !== o))} />
+              {o}
+            </label>
+          ))}
+        </div>
+      );
     } else if (f.type === 'select' || f.type === 'radio') {
       control = (
-        <select value={(v as string) ?? ''} onChange={(e) => set(e.target.value)}>
+        <select value={(v as string) ?? ''} disabled={ro} onChange={(e) => set(e.target.value)}>
           <option value="">Selecione...</option>
           {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       );
     } else if (f.type === 'file') {
       control = (
-        <input type="file" accept={f.acceptExtensions?.map((e) => '.' + e).join(',')}
+        <input type="file" disabled={ro} accept={f.acceptExtensions?.map((e) => '.' + e).join(',')}
           onChange={(e) => set(e.target.files?.[0]?.name ?? '')} />
       );
     } else {
-      control = <input value={(v as string) ?? ''} onChange={(e) => set(e.target.value)} />;
+      control = <input value={(v as string) ?? ''} readOnly={ro} onChange={(e) => set(e.target.value)} />;
     }
     return (
       <div key={f.key} style={{ marginBottom: 8 }}>
@@ -176,9 +208,41 @@ export function DispatchTimeline({
         <h2 style={{ margin: 0 }}>Despachos (timeline)</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           {isStaff && <button onClick={() => setAgentOpen((o) => !o)}>🤖 Agente de IA</button>}
-          <button className="secondary" onClick={() => openIntegra(processId)}>Baixar íntegra (PDF)</button>
+          <button className="secondary" onClick={() => {
+            const next = !integraOpen;
+            setIntegraOpen(next);
+            if (next && actTypes.length === 0) {
+              api.get<{ type: string; label: string; count: number }[]>(`/processes/${processId}/integra/act-types`)
+                .then((t) => { setActTypes(t); setSelectedActs(t.map((x) => x.type)); })
+                .catch(() => {});
+            }
+          }}>Íntegra do processo</button>
         </div>
       </div>
+
+      {integraOpen && (
+        <div style={{ border: '1px solid #1f7a3d', borderRadius: 8, padding: 12, marginTop: 10 }}>
+          <h3 style={{ marginTop: 0 }}>Íntegra do processo (req. 109-114)</h3>
+          <p className="help" style={{ marginTop: 0 }}>Selecione os atos a incluir. O ZIP acompanha os documentos emitidos.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {actTypes.map((t) => (
+              <label key={t.type} style={{ fontWeight: 400 }}>
+                <input type="checkbox" style={{ width: 'auto', marginRight: 6 }}
+                  checked={selectedActs.includes(t.type)}
+                  onChange={(e) => setSelectedActs((s) => e.target.checked ? [...s, t.type] : s.filter((x) => x !== t.type))} />
+                {t.label} <span className="help">({t.count})</span>
+              </label>
+            ))}
+            {actTypes.length === 0 && <span className="help">Carregando atos…</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button className="secondary" onClick={() => setSelectedActs(actTypes.map((x) => x.type))}>Selecionar todos</button>
+            <button className="secondary" onClick={() => setSelectedActs([])}>Limpar</button>
+            <button style={{ marginLeft: 'auto' }} onClick={() => downloadIntegra(processId, 'pdf', selectedActs)}>Baixar PDF</button>
+            <button onClick={() => downloadIntegra(processId, 'zip', selectedActs)}>Baixar ZIP</button>
+          </div>
+        </div>
+      )}
 
       {agentOpen && (
         <div style={{ border: '1px solid #1f7a3d', borderRadius: 8, padding: 12, marginTop: 10 }}>
@@ -295,4 +359,33 @@ function selectedSituation(types: DType[], d: Dispatch): Situation | undefined {
     if (s) return s;
   }
   return undefined;
+}
+
+// Editor de texto avançado do despacho (req. 97): negrito, itálico, sublinhado,
+// listas e hyperlink, via contentEditable.
+function DispatchRichText({ html, onChange, readOnly }: { html: string; onChange: (h: string) => void; readOnly?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== (html ?? '')) ref.current.innerHTML = html ?? '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const emit = () => ref.current && onChange(ref.current.innerHTML);
+  const cmd = (c: string, val?: string) => { document.execCommand(c, false, val); emit(); };
+  const btn: React.CSSProperties = { padding: '2px 8px', fontSize: 12, width: 'auto' };
+  return (
+    <div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 4, marginBottom: 2, flexWrap: 'wrap' }}>
+          <button type="button" className="secondary" style={btn} title="Negrito" onMouseDown={(e) => { e.preventDefault(); cmd('bold'); }}><b>N</b></button>
+          <button type="button" className="secondary" style={btn} title="Itálico" onMouseDown={(e) => { e.preventDefault(); cmd('italic'); }}><i>I</i></button>
+          <button type="button" className="secondary" style={btn} title="Sublinhado" onMouseDown={(e) => { e.preventDefault(); cmd('underline'); }}><u>S</u></button>
+          <button type="button" className="secondary" style={btn} title="Lista" onMouseDown={(e) => { e.preventDefault(); cmd('insertUnorderedList'); }}>• Lista</button>
+          <button type="button" className="secondary" style={btn} title="Lista numerada" onMouseDown={(e) => { e.preventDefault(); cmd('insertOrderedList'); }}>1. Lista</button>
+          <button type="button" className="secondary" style={btn} title="Link" onMouseDown={(e) => { e.preventDefault(); const u = window.prompt('URL do link:'); if (u) cmd('createLink', u); }}>🔗</button>
+        </div>
+      )}
+      <div ref={ref} contentEditable={!readOnly} suppressContentEditableWarning onInput={emit}
+        style={{ border: '1px solid #d8dee4', borderRadius: 6, minHeight: 60, padding: '6px 8px', background: readOnly ? '#f3f4f6' : '#fff', fontSize: 14 }} />
+    </div>
+  );
 }

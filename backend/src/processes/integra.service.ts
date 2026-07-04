@@ -1,9 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import * as QRCode from 'qrcode';
+import JSZip from 'jszip';
 import { PrismaService } from '../prisma/prisma.service';
+import { DocumentsService } from '../documents/documents.service';
+
+// Tipos de ato para seleção da íntegra (req. 113).
+type ActType = 'ABERTURA' | 'MOVIMENTO' | 'ANALISE' | 'DESPACHO' | 'TAXA' | 'DOCUMENTO';
+
+export const ACT_TYPE_LABELS: Record<ActType, string> = {
+  ABERTURA: 'Abertura do processo',
+  MOVIMENTO: 'Encaminhamentos e decisões',
+  ANALISE: 'Análises técnicas',
+  DESPACHO: 'Despachos',
+  TAXA: 'Taxas',
+  DOCUMENTO: 'Documentos emitidos',
+};
 
 interface Act {
+  type: ActType;
   date: Date;
   heading: string;
   lines: string[];
@@ -20,10 +35,57 @@ const MOVEMENT_LABEL: Record<string, string> = {
 
 @Injectable()
 export class IntegraService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private documents: DocumentsService,
+  ) {}
+
+  // Lista os tipos de ato disponíveis num processo, para a tela de seleção (req. 113).
+  async availableActTypes(processId: string): Promise<{ type: ActType; label: string; count: number }[]> {
+    const acts = await this.collectActs(processId);
+    const counts = new Map<ActType, number>();
+    for (const a of acts) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
+    return (Object.keys(ACT_TYPE_LABELS) as ActType[])
+      .filter((t) => counts.has(t))
+      .map((t) => ({ type: t, label: ACT_TYPE_LABELS[t], count: counts.get(t)! }));
+  }
 
   // Gera a íntegra processual (relatório capa a capa e cronológico) — req. 109-113.
-  async generate(processId: string): Promise<Buffer> {
+  // `filter` (opcional) restringe os atos aos tipos escolhidos.
+  async generate(processId: string, filter?: ActType[]): Promise<Buffer> {
+    const proc = await this.getProc(processId);
+    let acts = this.collectActsFrom(proc);
+    if (filter?.length) acts = acts.filter((a) => filter.includes(a.type));
+    acts.sort((a, b) => a.date.getTime() - b.date.getTime());
+    return this.buildPdf(proc, acts);
+  }
+
+  // Empacota a íntegra + os documentos emitidos num único ZIP (req. 113).
+  async generateZip(processId: string, filter?: ActType[]): Promise<{ buffer: Buffer; filename: string }> {
+    const proc = await this.getProc(processId);
+    const zip = new JSZip();
+    const integraPdf = await this.generate(processId, filter);
+    zip.file(`integra-${proc.number}.pdf`, integraPdf);
+
+    // Inclui os PDFs dos documentos emitidos como anexos, salvo se o filtro os excluir.
+    const includeDocs = !filter?.length || filter.includes('DOCUMENTO');
+    if (includeDocs && proc.documents?.length) {
+      const docsFolder = zip.folder('documentos');
+      for (const doc of proc.documents) {
+        try {
+          const { buffer, filename } = await this.documents.getFile(doc.id);
+          docsFolder?.file(filename, buffer);
+        } catch {
+          // documento sem arquivo materializável — ignora no pacote
+        }
+      }
+    }
+
+    const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+    return { buffer, filename: `integra-${proc.number}.zip` };
+  }
+
+  private async getProc(processId: string) {
     const proc = await this.prisma.process.findUnique({
       where: { id: processId },
       include: {
@@ -37,11 +99,19 @@ export class IntegraService {
       },
     });
     if (!proc) throw new NotFoundException('Processo não encontrado');
+    return proc;
+  }
 
-    // Reúne os atos administrativos (req. 110).
+  private async collectActs(processId: string): Promise<Act[]> {
+    return this.collectActsFrom(await this.getProc(processId));
+  }
+
+  // Reúne os atos administrativos, cada um marcado com seu tipo (req. 110, 113).
+  private collectActsFrom(proc: any): Act[] {
     const acts: Act[] = [];
 
     acts.push({
+      type: 'ABERTURA',
       date: proc.protocoledAt ?? proc.createdAt,
       heading: 'Abertura do processo',
       lines: [
@@ -61,6 +131,7 @@ export class IntegraService {
       if (c.text) lines.push(c.text);
       if (c.note) lines.push(c.note);
       acts.push({
+        type: 'MOVIMENTO',
         date: m.createdAt,
         heading: MOVEMENT_LABEL[m.type] ?? m.type,
         lines,
@@ -70,6 +141,7 @@ export class IntegraService {
     for (const a of proc.analyses) {
       const items = (a.items as any[]) ?? [];
       acts.push({
+        type: 'ANALISE',
         date: a.createdAt,
         heading: 'Análise técnica',
         lines: [
@@ -93,11 +165,12 @@ export class IntegraService {
         lines.push(`Ajuste: ${d.adjustmentType}`);
         if (d.justification) lines.push(`Justificativa: ${d.justification}`);
       }
-      acts.push({ date: d.createdAt, heading: `Despacho: ${d.title}`, lines });
+      acts.push({ type: 'DESPACHO', date: d.createdAt, heading: `Despacho: ${d.title}`, lines });
     }
 
     for (const f of proc.fees) {
       acts.push({
+        type: 'TAXA',
         date: f.createdAt,
         heading: 'Taxa',
         lines: [`${f.description}`, `Valor: R$ ${f.amount}`, `Situação: ${f.status}`],
@@ -106,6 +179,7 @@ export class IntegraService {
 
     for (const doc of proc.documents) {
       acts.push({
+        type: 'DOCUMENTO',
         date: doc.createdAt,
         heading: 'Documento emitido',
         lines: [
@@ -117,9 +191,17 @@ export class IntegraService {
       });
     }
 
-    acts.sort((a, b) => a.date.getTime() - b.date.getTime());
+    return acts;
+  }
 
-    return this.buildPdf(proc, acts);
+  // Brasão institucional simplificado (escudo) para a capa (req. 112).
+  private drawBrasao(page: any, x: number, yTop: number, color: any, bold: any) {
+    const path = 'M0,0 L44,0 L44,28 Q44,46 22,52 Q0,46 0,28 Z';
+    page.drawSvgPath(path, { x, y: yTop, color, borderColor: color, scale: 1 });
+    // Borda interna clara e sigla do município.
+    page.drawText('CAB', {
+      x: x + 9, y: yTop - 30, size: 13, font: bold, color: rgb(1, 1, 1),
+    });
   }
 
   private kvLines(obj: Record<string, unknown>): string[] {
@@ -138,15 +220,17 @@ export class IntegraService {
     const margin = 50;
 
     const baseUrl = process.env.PUBLIC_URL || 'http://localhost:3000';
-    const verifyUrl = `${baseUrl}/processo/${proc.number}`;
+    // Rota de SPA válida para consulta do processo (o /processo/:number antigo não resolvia).
+    const verifyUrl = `${baseUrl}/process/${proc.id}`;
 
     // ── Capa (req. 112) ──
     const capa = pdf.addPage([595, 842]);
+    this.drawBrasao(capa, margin, 762, green, bold);
     capa.drawText('PREFEITURA MUNICIPAL DE CABREÚVA', {
-      x: margin, y: 780, size: 16, font: bold, color: green,
+      x: margin + 56, y: 786, size: 16, font: bold, color: green,
     });
     capa.drawText('Secretaria de Meio Ambiente, Obras e Serviços Urbanos', {
-      x: margin, y: 760, size: 10, font, color: green,
+      x: margin + 56, y: 768, size: 10, font, color: green,
     });
     capa.drawText('ÍNTEGRA DO PROCESSO', {
       x: margin, y: 700, size: 22, font: bold, color: black,

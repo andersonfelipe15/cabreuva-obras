@@ -8,9 +8,10 @@ import { IntegraService } from './integra.service';
 import { SubstitutionsService } from './substitutions.service';
 import { SubstitutionsController } from './substitutions.controller';
 import { IntegrationsModule } from '../integrations/integrations.module';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
-  imports: [IntegrationsModule],
+  imports: [IntegrationsModule, DocumentsModule],
   providers: [ProcessesService, DispatchesService, IntegraService, SubstitutionsService],
   controllers: [
     ProcessesController,

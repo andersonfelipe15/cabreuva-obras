@@ -7,5 +7,6 @@ import { SignatureService } from './signature.service';
 @Module({
   providers: [DocumentsService, PdfService, SignatureService],
   controllers: [DocumentsController],
+  exports: [DocumentsService],
 })
 export class DocumentsModule {}

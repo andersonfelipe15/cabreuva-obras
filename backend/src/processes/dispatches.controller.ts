@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Res,
   StreamableFile,
   UseGuards,
@@ -59,17 +60,45 @@ export class DispatchesController {
     return this.dispatches.advanceStatus(user, id);
   }
 
-  // Íntegra processual em PDF (req. 109-114).
+  // Tipos de ato disponíveis para seleção da íntegra (req. 113).
+  @Get('processes/:id/integra/act-types')
+  integraActTypes(@Param('id') id: string) {
+    return this.integra.availableActTypes(id);
+  }
+
+  // Íntegra processual em PDF (req. 109-114). `acts` (CSV) filtra os tipos de ato.
   @Get('processes/:id/integra.pdf')
   async integraPdf(
     @Param('id') id: string,
+    @Query('acts') acts: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const pdf = await this.integra.generate(id);
+    const pdf = await this.integra.generate(id, this.parseActs(acts));
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="integra-${id}.pdf"`,
     });
     return new StreamableFile(pdf);
+  }
+
+  // Íntegra + documentos emitidos empacotados em ZIP (req. 113).
+  @Get('processes/:id/integra.zip')
+  async integraZip(
+    @Param('id') id: string,
+    @Query('acts') acts: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, filename } = await this.integra.generateZip(id, this.parseActs(acts));
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    return new StreamableFile(buffer);
+  }
+
+  private parseActs(acts: string | undefined): any[] | undefined {
+    if (!acts) return undefined;
+    const list = acts.split(',').map((a) => a.trim()).filter(Boolean);
+    return list.length ? list : undefined;
   }
 }

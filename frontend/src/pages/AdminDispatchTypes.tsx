@@ -8,7 +8,9 @@ interface DType {
   enabled: boolean; fields: DField[]; situations?: Situation[];
 }
 
-const FIELD_TYPES = ['text', 'textarea', 'richtext', 'select', 'number', 'date', 'file'];
+const FIELD_TYPES = ['text', 'textarea', 'richtext', 'select', 'multiselect', 'number', 'date', 'file'];
+// Extensões mínimas exigidas para anexo de despacho (req. 97).
+const DISPATCH_EXTS = ['xlsx', 'xls', 'doc', 'docx', 'odt', 'csv', 'pdf', 'png', 'jpg', 'dwg', 'mp3', 'mp4', 'rar', 'zip', '7z'];
 const blank = (): DType => ({ name: 'Novo tipo de despacho', allowRequester: false, enabled: true, fields: [], situations: [] });
 
 // Construtor no-code de tipos de despacho: nome, uso, habilitar, campos e situações (req. 96-97).
@@ -113,9 +115,28 @@ export function AdminDispatchTypes() {
                   </select>
                 </div>
               </div>
-              {f.type === 'select' && (
+              {(f.type === 'select' || f.type === 'multiselect') && (
                 <><label>Opções (vírgula)</label>
                 <input value={(f.options ?? []).join(', ')} onChange={(e) => updField(i, { options: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} /></>
+              )}
+              {f.type === 'file' && (
+                <div style={{ marginTop: 4 }}>
+                  <label>Extensões permitidas</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="secondary" style={{ padding: '2px 8px', fontSize: 11 }}
+                      onClick={() => updField(i, { acceptExtensions: [...DISPATCH_EXTS] })}>Usar mínimas do edital</button>
+                    {DISPATCH_EXTS.map((ext) => {
+                      const cur = f.acceptExtensions ?? [];
+                      return (
+                        <label key={ext} style={{ fontWeight: 400, fontSize: 12 }}>
+                          <input type="checkbox" style={{ width: 'auto', marginRight: 3 }} checked={cur.includes(ext)}
+                            onChange={(e) => updField(i, { acceptExtensions: e.target.checked ? [...cur, ext] : cur.filter((x) => x !== ext) })} />
+                          {ext}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
               <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
                 <label style={{ fontWeight: 400 }}><input type="checkbox" style={{ width: 'auto' }} checked={!!f.required} onChange={(e) => updField(i, { required: e.target.checked })} /> Obrigatório</label>
