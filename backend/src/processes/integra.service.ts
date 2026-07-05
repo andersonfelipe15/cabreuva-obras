@@ -207,9 +207,24 @@ export class IntegraService {
 
   private kvLines(obj: Record<string, unknown>): string[] {
     if (!obj) return [];
-    return Object.entries(obj).map(
-      ([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v ?? '')}`,
-    );
+    return Object.entries(obj).map(([k, v]) => {
+      const raw = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+      // Remove marcação HTML de campos rich-text para leitura na íntegra.
+      const clean = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return `${k}: ${clean}`;
+    });
+  }
+
+  // Converte para o conjunto que a fonte WinAnsi (Helvetica do pdf-lib) codifica.
+  // Sem isso, travessão (–/—), aspas curvas, reticências etc. quebram o drawText (500).
+  private win(s: string): string {
+    return String(s ?? '')
+      .replace(/[‐-―]/g, '-')
+      .replace(/[‘’‚‛]/g, "'")
+      .replace(/[“”„‟]/g, '"')
+      .replace(/…/g, '...')
+      .replace(/ /g, ' ')
+      .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, '?');
   }
 
   private async buildPdf(proc: any, acts: Act[]): Promise<Buffer> {
@@ -244,7 +259,7 @@ export class IntegraService {
       `Total de atos: ${acts.length}`,
     ];
     capaInfo.forEach((t, i) =>
-      capa.drawText(t, { x: margin, y: 660 - i * 20, size: 12, font, color: black }),
+      capa.drawText(this.win(t), { x: margin, y: 660 - i * 20, size: 12, font, color: black }),
     );
     const qrPng = await QRCode.toBuffer(verifyUrl, { margin: 1, width: 120 });
     const qrImg = await pdf.embedPng(qrPng);
@@ -263,7 +278,7 @@ export class IntegraService {
       page.drawText(`Folha ${idx + 1}`, {
         x: 500, y: 810, size: 9, font, color: rgb(0.5, 0.5, 0.5),
       });
-      page.drawText(act.heading, { x: margin, y, size: 15, font: bold, color: green });
+      page.drawText(this.win(act.heading), { x: margin, y, size: 15, font: bold, color: green });
       y -= 8;
       page.drawLine({
         start: { x: margin, y }, end: { x: 545, y }, thickness: 1, color: green,
@@ -275,7 +290,7 @@ export class IntegraService {
       y -= 22;
       for (const line of act.lines) {
         if (y < 60) break; // corta se exceder a folha (POC)
-        page.drawText(line.slice(0, 100), { x: margin, y, size: 10, font, color: black });
+        page.drawText(this.win(line).slice(0, 100), { x: margin, y, size: 10, font, color: black });
         y -= 16;
       }
     });

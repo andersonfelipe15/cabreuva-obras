@@ -93,7 +93,16 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' https://app-production-f8bf.up.railway.app/)",
       "Bash(curl -s -X POST https://app-production-f8bf.up.railway.app/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@cabreuva.sp.gov.br\",\"password\":\"admin123\"}' -w '\\\\nHTTP %{http_code}\\\\n')",
       "Bash(xxd)",
-      "Bash(railway up *])"
+      "Bash(railway up *])",
+      "Bash(awk -F'|' '/^\\\\| [0-9]+ \\\\|/ { if \\($0 !~ /testado/\\) { gsub\\(/^ +| +$/,\"\",$2\\); gsub\\(/^ +| +$/,\"\",$3\\); print $2\" :: \"$3 } }' MATRIZ-POC.md)",
+      "Bash(tee /tmp/sem_teste.txt)",
+      "Bash(curl -s https://app-production-f8bf.up.railway.app/api/process-types/fa2692da-ca53-4876-ad1a-ebfb797bef07 -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s https://app-production-f8bf.up.railway.app/api/processes/__TRACKED_VAR__/dispatch-types -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(python - /c/Users/adm/AppData/Local/Temp/claude/C--Users-adm-Downloads-Nova-pasta--23-/d96e1d11-3310-4387-8bbf-dfbeed94f0e7/scratchpad/all_pt.json)",
+      "Bash(curl -s https://app-production-f8bf.up.railway.app/api/dispatch-types -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(python -c \"import sys,json; [print\\(x['id'], x.get\\('name'\\), 'enabled=',x.get\\('enabled'\\)\\) for x in json.load\\(sys.stdin\\)]\")",
+      "Bash(python -c ' *)"
     ]
   }
 }
