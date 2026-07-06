@@ -52,6 +52,8 @@ export function Sisobra() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Mensagem por lote, exibida dentro do card (perto do botão que foi clicado).
+  const [batchMsg, setBatchMsg] = useState<Record<string, string>>({});
   const [useCert, setUseCert] = useState(true);
   const [corr, setCorr] = useState<Record<string, string>>({});
 
@@ -67,26 +69,33 @@ export function Sisobra() {
     catch (e) { setError((e as Error).message); }
   }
 
-  // Transmite o lote e dá retorno claro (quantos enviados, quantos pendentes e por quê).
+  // Transmite o lote e dá retorno claro (quantos enviados, quantos pendentes e por quê),
+  // exibido DENTRO do próprio card do lote — onde o usuário clicou.
   async function transmit(batch: Batch) {
     const errCount = batch.items.filter((i) => i.status === 'XML_ERROR').length;
-    await run(
-      () => api.post<{ transmitted: number; pending: number }>(
+    setError('');
+    setBatchMsg((s) => ({ ...s, [batch.id]: 'Transmitindo…' }));
+    try {
+      const r = await api.post<{ transmitted: number; pending: number }>(
         `/sisobra/batches/${batch.id}/transmit`, { useCertificate: useCert },
-      ),
-      (r) => {
-        const { transmitted, pending } = r as { transmitted: number; pending: number };
-        if (transmitted > 0) {
-          return `${transmitted} documento(s) transmitido(s)` +
-            (pending > 0 ? `; ${pending} pendente(s) com erro de XML a corrigir.` : '.');
-        }
-        if (errCount > 0) {
-          return `Nenhum documento transmitido: ${errCount} com erro de XML. ` +
-            'Preencha a inscrição imobiliária e clique em "Corrigir" antes de transmitir.';
-        }
-        return 'Nenhum documento pendente — todos os documentos deste lote já foram transmitidos.';
-      },
-    );
+      );
+      const { transmitted, pending } = r;
+      let msg: string;
+      if (transmitted > 0) {
+        msg = `✅ ${transmitted} documento(s) transmitido(s) ao SISOBRA` +
+          (pending > 0 ? `; ${pending} ainda com erro de XML a corrigir.` : '.');
+      } else if (errCount > 0) {
+        msg = `⚠️ Nenhum transmitido: ${errCount} documento(s) com erro de XML. ` +
+          'Preencha a inscrição imobiliária e clique em "Corrigir" antes de transmitir.';
+      } else {
+        msg = 'ℹ️ Nenhum documento pendente — todos os deste lote já foram transmitidos.';
+      }
+      setBatchMsg((s) => ({ ...s, [batch.id]: msg }));
+      load();
+    } catch (e) {
+      setBatchMsg((s) => ({ ...s, [batch.id]: '' }));
+      setError((e as Error).message);
+    }
   }
 
   // Agrupa por mês de referência (req. 168).
@@ -136,6 +145,11 @@ export function Sisobra() {
                   </button>
                 </div>
               </div>
+              {batchMsg[b.id] && (
+                <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, background: '#f0f9f2', border: '1px solid #1f7a3d', fontSize: 13 }}>
+                  {batchMsg[b.id]}
+                </div>
+              )}
               <table style={{ marginTop: 10 }}>
                 <thead><tr><th>Tipo</th><th>Processo</th><th>Status SISOBRA</th><th>Correção</th></tr></thead>
                 <tbody>
