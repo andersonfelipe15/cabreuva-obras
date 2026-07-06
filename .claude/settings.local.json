@@ -105,7 +105,8 @@
       "Bash(python -c ' *)",
       "Bash(node -e 'const {PDFDocument}=require\\('\\\\''pdf-lib'\\\\''\\);const fs=require\\('\\\\''fs'\\\\''\\);\\(async\\(\\)=>{const d=await PDFDocument.load\\(fs.readFileSync\\('\\\\''/c/Users/adm/AppData/Local/Temp/claude/C--Users-adm-Downloads-Nova-pasta--23-/d96e1d11-3310-4387-8bbf-dfbeed94f0e7/scratchpad/it.pdf'\\\\''\\)\\);console.log\\('\\\\''PAGINAS:'\\\\'',d.getPageCount\\(\\)\\);}\\)\\(\\)')",
       "Bash(python -)",
-      "Bash(awk -F'|' '/^\\\\| [0-9]+ \\\\|/ { if \\(tolower\\($0\\) !~ /testado/\\) print $2 }' MATRIZ-POC.md)"
+      "Bash(awk -F'|' '/^\\\\| [0-9]+ \\\\|/ { if \\(tolower\\($0\\) !~ /testado/\\) print $2 }' MATRIZ-POC.md)",
+      "Bash(xargs grep -l \"SYSTEM_ROLES\\\\|PERMISSIONS\")"
     ]
   }
 }
