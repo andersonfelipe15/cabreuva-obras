@@ -237,10 +237,16 @@ export class ProcessesService {
         }
 
         // Número: preserva o legado se informado e único; senão gera novo.
+        // Garante unicidade mesmo que o mesmo legado seja importado mais de uma vez
+        // (sufixo -IMP e, se preciso, -IMP2, -IMP3… até não colidir).
         let number = it.legacyNumber?.trim() || (await this.nextNumber());
         if (it.legacyNumber) {
-          const exists = await this.prisma.process.findUnique({ where: { number } });
-          if (exists) number = `${number}-IMP`;
+          const base = number;
+          let attempt = 0;
+          while (await this.prisma.process.findUnique({ where: { number } })) {
+            attempt += 1;
+            number = attempt === 1 ? `${base}-IMP` : `${base}-IMP${attempt}`;
+          }
         }
 
         const created = await this.prisma.process.create({
