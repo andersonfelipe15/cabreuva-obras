@@ -51,6 +51,7 @@ export function Sisobra() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [useCert, setUseCert] = useState(true);
   const [corr, setCorr] = useState<Record<string, string>>({});
 
@@ -60,9 +61,32 @@ export function Sisobra() {
   }, []);
   useEffect(load, [load]);
 
-  async function run(fn: () => Promise<unknown>) {
-    setError('');
-    try { await fn(); load(); } catch (e) { setError((e as Error).message); }
+  async function run(fn: () => Promise<unknown>, ok?: (r: unknown) => string) {
+    setError(''); setNotice('');
+    try { const r = await fn(); if (ok) setNotice(ok(r)); load(); }
+    catch (e) { setError((e as Error).message); }
+  }
+
+  // Transmite o lote e dá retorno claro (quantos enviados, quantos pendentes e por quê).
+  async function transmit(batch: Batch) {
+    const errCount = batch.items.filter((i) => i.status === 'XML_ERROR').length;
+    await run(
+      () => api.post<{ transmitted: number; pending: number }>(
+        `/sisobra/batches/${batch.id}/transmit`, { useCertificate: useCert },
+      ),
+      (r) => {
+        const { transmitted, pending } = r as { transmitted: number; pending: number };
+        if (transmitted > 0) {
+          return `${transmitted} documento(s) transmitido(s)` +
+            (pending > 0 ? `; ${pending} pendente(s) com erro de XML a corrigir.` : '.');
+        }
+        if (errCount > 0) {
+          return `Nenhum documento transmitido: ${errCount} com erro de XML. ` +
+            'Preencha a inscrição imobiliária e clique em "Corrigir" antes de transmitir.';
+        }
+        return 'Nenhum documento pendente — todos os documentos deste lote já foram transmitidos.';
+      },
+    );
   }
 
   // Agrupa por mês de referência (req. 168).
@@ -75,11 +99,19 @@ export function Sisobra() {
     <div>
       <h1>SISOBRA — Envio de Documentos</h1>
       {error && <div className="error">{error}</div>}
+      {notice && <div className="card" style={{ borderColor: '#1f7a3d', background: '#f0f9f2' }}>{notice}</div>}
 
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <button onClick={() => run(() => api.post('/sisobra/batches'))}>Gerar novo lote</button>
+            <button onClick={() => run(
+              () => api.post<{ items?: unknown[] }>('/sisobra/batches'),
+              (r) => {
+                const n = ((r as { items?: unknown[] })?.items ?? []).length;
+                return n > 0 ? `Novo lote gerado com ${n} documento(s).`
+                  : 'Nenhum alvará deferido pendente para gerar lote no momento.';
+              },
+            )}>Gerar novo lote</button>
           </div>
           <label style={{ fontWeight: 400 }}>
             <input type="checkbox" style={{ width: 'auto', marginRight: 6 }}
@@ -99,7 +131,7 @@ export function Sisobra() {
                 <strong>Lote {b.id.slice(0, 8)}</strong>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="secondary" onClick={() => downloadXml(b.id)}>Baixar XML</button>
-                  <button onClick={() => run(() => api.post(`/sisobra/batches/${b.id}/transmit`, { useCertificate: useCert }))}>
+                  <button onClick={() => transmit(b)}>
                     Transmitir
                   </button>
                 </div>
@@ -121,7 +153,11 @@ export function Sisobra() {
                             <input placeholder="Inscrição imobiliária" style={{ width: 160 }}
                               value={corr[it.id] ?? ''} onChange={(e) => setCorr((s) => ({ ...s, [it.id]: e.target.value }))} />
                             <button className="secondary" style={{ padding: '2px 8px', fontSize: 12 }}
-                              onClick={() => run(() => api.patch(`/sisobra/documents/${it.id}`, { fields: { inscricaoImobiliaria: corr[it.id] } }))}>
+                              disabled={!corr[it.id]?.trim()}
+                              onClick={() => run(
+                                () => api.patch(`/sisobra/documents/${it.id}`, { fields: { inscricaoImobiliaria: corr[it.id] } }),
+                                () => 'Documento corrigido. Agora clique em "Transmitir" para enviá-lo.',
+                              )}>
                               Corrigir
                             </button>
                           </div>
