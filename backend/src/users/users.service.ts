@@ -129,6 +129,24 @@ export class UsersService {
     return u;
   }
 
+  // Altera os perfis (permissões) de um usuário já cadastrado (req. 14-17).
+  async setRoles(id: string, roleIds: string[], byId?: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+    const ids = [...new Set((roleIds ?? []).filter(Boolean))];
+    if (ids.length === 0) throw new BadRequestException('Selecione ao menos um perfil.');
+    // Valida que todos os perfis existem.
+    const roles = await this.prisma.role.findMany({ where: { id: { in: ids } } });
+    if (roles.length !== ids.length) throw new BadRequestException('Perfil inválido.');
+    // Substitui o conjunto de perfis do usuário.
+    await this.prisma.$transaction([
+      this.prisma.userRole.deleteMany({ where: { userId: id } }),
+      this.prisma.userRole.createMany({ data: ids.map((roleId) => ({ userId: id, roleId })) }),
+    ]);
+    await this.audit(id, 'ROLES', byId, { roles: roles.map((r) => r.name) });
+    return this.detail(id);
+  }
+
   async createInternal(
     data: {
       name: string;

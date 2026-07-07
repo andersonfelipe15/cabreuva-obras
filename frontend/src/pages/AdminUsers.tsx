@@ -18,6 +18,8 @@ export function AdminUsers() {
   const [detail, setDetail] = useState<any>(null);
   const [stForm, setStForm] = useState<{ status: string; substituteId: string }>({ status: 'ACTIVE', substituteId: '' });
   const [hist, setHist] = useState<any[]>([]);
+  // Edição dos perfis (permissões) de um usuário já cadastrado.
+  const [roleEdit, setRoleEdit] = useState<string[]>([]);
   const [newSector, setNewSector] = useState('');
   const [form, setForm] = useState<any>({ name: '', document: '', email: '', cargo: '', password: '', roleIds: [], sectorIds: [] });
 
@@ -81,12 +83,22 @@ export function AdminUsers() {
     api.get<any>(`/users/${id}`).then((d) => {
       setDetail(d);
       setStForm({ status: d.status, substituteId: d.substituteId ?? '' });
+      setRoleEdit((d.roles ?? []).map((r: any) => r.role.id));
     });
     api.get<any[]>(`/users/${id}/history`).then(setHist).catch(() => setHist([]));
   }
   async function saveStatus() {
     await run(async () => {
       await api.patch(`/users/${detail.id}/status`, stForm);
+      openDetail(detail.id);
+      load();
+    });
+  }
+  // Salva os perfis (admin/analista/requerente...) do usuário.
+  async function saveRoles() {
+    if (roleEdit.length === 0) { setError('Selecione ao menos um perfil.'); return; }
+    await run(async () => {
+      await api.patch(`/users/${detail.id}/roles`, { roleIds: roleEdit });
       openDetail(detail.id);
       load();
     });
@@ -139,6 +151,22 @@ export function AdminUsers() {
           <p>Processos na caixa de entrada: {detail.processosNaCaixaEntrada ?? 0} · Protocolados: {detail.processosProtocolados} · Acessados: {detail.processosAcessados}</p>
 
           <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 4 }}>
+            <h3 style={{ marginTop: 0 }}>Perfis / permissões (req. 14-17)</h3>
+            <p className="help" style={{ marginTop: 0 }}>Marque os perfis deste usuário (ex.: Administrador, Analista, Requerente). Um usuário pode acumular mais de um.</p>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
+              {roles.map((r) => (
+                <label key={r.id} style={{ fontWeight: 400 }}>
+                  <input type="checkbox" style={{ width: 'auto', marginRight: 5 }}
+                    checked={roleEdit.includes(r.id)}
+                    onChange={() => setRoleEdit((s) => toggle(s, r.id))} />
+                  {r.name}
+                </label>
+              ))}
+            </div>
+            <button onClick={saveRoles}>Salvar perfis</button>
+          </div>
+
+          <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 10 }}>
             <h3 style={{ marginTop: 0 }}>Status e substituto (req. 13)</h3>
             <div className="row" style={{ alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}>

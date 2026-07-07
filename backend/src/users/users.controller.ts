@@ -64,6 +64,17 @@ export class UsersController {
     return this.service.block(id, blocked, user.id);
   }
 
+  // Altera os perfis (permissões) de um usuário já cadastrado (req. 14-17).
+  @Patch(':id/roles')
+  @RequirePermissions(PERMISSIONS.ROLE_ASSIGN)
+  setRoles(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body('roleIds') roleIds: string[],
+  ) {
+    return this.service.setRoles(id, roleIds, user.id);
+  }
+
   // Status de ausência (Férias/Viagem/Licença/Desativado) + substituto (req. 13).
   @Patch(':id/status')
   @RequirePermissions(PERMISSIONS.USER_MANAGE)
