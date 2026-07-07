@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { uploadFile, api } from './api';
+import { maskCpfCnpj, validateCpfCnpj } from './cpfcnpj';
 
 // Tipos espelham o form-schema do backend.
 interface Field {
@@ -254,7 +255,21 @@ export function DynamicForm({
         control = <input value={String(result)} readOnly style={{ background: '#f3f4f6' }} />;
         break;
       }
-      default: // text, cpfcnpj, cep
+      case 'cpfcnpj': {
+        const dErr = val ? validateCpfCnpj(val as string) : null;
+        control = (
+          <>
+            <input value={(val as string) ?? ''} readOnly={f.readonly}
+              inputMode="numeric" placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              style={dErr ? { borderColor: '#b42318' } : undefined}
+              onChange={(e) => set(f.key, maskCpfCnpj(e.target.value))}
+              onBlur={() => runFieldServices(f, values[f.key])} />
+            {dErr && <div style={{ color: '#b42318', fontSize: 12 }}>{dErr}</div>}
+          </>
+        );
+        break;
+      }
+      default: // text, cep
         control = (
           <input value={(val as string) ?? ''} readOnly={f.readonly}
             onChange={(e) => set(f.key, e.target.value)}
