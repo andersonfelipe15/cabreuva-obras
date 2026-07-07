@@ -15,8 +15,9 @@ export function AdminUsers() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
-  // Mensagem da troca de perfil, exibida abaixo do botão "Salvar perfil".
+  // Mensagens temporárias (somem após 3s) exibidas abaixo dos respectivos botões.
   const [roleMsg, setRoleMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [createMsg, setCreateMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [stForm, setStForm] = useState<{ status: string; substituteId: string }>({ status: 'ACTIVE', substituteId: '' });
   const [hist, setHist] = useState<any[]>([]);
@@ -70,24 +71,35 @@ export function AdminUsers() {
     setError('');
     try { await fn(); load(); } catch (e) { setError((e as Error).message); }
   }
+  // Exibe uma mensagem e a remove após 3 segundos.
+  function flash(setter: (m: { text: string; ok: boolean } | null) => void, text: string, ok: boolean) {
+    setter({ text, ok });
+    setTimeout(() => setter(null), 3000);
+  }
   function toggle(list: string[], id: string) {
     return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   }
 
   async function create() {
-    await run(async () => {
+    try {
       await api.post('/users', form);
+      const nome = form.name;
       setForm({ name: '', document: '', email: '', cargo: '', password: '', roleIds: [], sectorIds: [] });
-    });
+      load();
+      flash(setCreateMsg, `Usuário "${nome}" cadastrado com sucesso.`, true);
+    } catch (e) {
+      flash(setCreateMsg, `Não foi possível cadastrar: ${(e as Error).message}`, false);
+    }
   }
 
-  function openDetail(id: string) {
+  // keepMsg=true preserva a mensagem (usado no refresh após salvar o perfil).
+  function openDetail(id: string, keepMsg = false) {
     api.get<any>(`/users/${id}`).then((d) => {
       setDetail(d);
       setStForm({ status: d.status, substituteId: d.substituteId ?? '' });
       // Um perfil por usuário: usa o primeiro (ou vazio).
       setRoleEdit(d.roles?.[0]?.role.id ?? '');
-      setRoleMsg(null);
+      if (!keepMsg) setRoleMsg(null);
     });
     api.get<any[]>(`/users/${id}/history`).then(setHist).catch(() => setHist([]));
   }
@@ -100,16 +112,15 @@ export function AdminUsers() {
   }
   // Salva o perfil (admin/analista/requerente) do usuário — apenas um.
   async function saveRoles() {
-    setRoleMsg(null);
-    if (!roleEdit) { setRoleMsg({ text: 'Selecione um perfil para o usuário.', ok: false }); return; }
+    if (!roleEdit) { flash(setRoleMsg, 'Selecione um perfil para o usuário.', false); return; }
     const roleName = roles.find((r) => r.id === roleEdit)?.name ?? 'novo perfil';
     try {
       await api.patch(`/users/${detail.id}/roles`, { roleIds: [roleEdit] });
-      setRoleMsg({ text: `Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`, ok: true });
-      openDetail(detail.id);
+      openDetail(detail.id, true); // atualiza mantendo a mensagem
       load();
+      flash(setRoleMsg, `Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`, true);
     } catch (e) {
-      setRoleMsg({ text: `Não foi possível alterar o perfil: ${(e as Error).message}`, ok: false });
+      flash(setRoleMsg, `Não foi possível alterar o perfil: ${(e as Error).message}`, false);
     }
   }
 
@@ -264,6 +275,16 @@ export function AdminUsers() {
         </div>
         <div style={{ marginTop: 12 }}>
           <button disabled={!form.name || !form.document || !form.email || !form.password} onClick={create}>Cadastrar usuário</button>
+          {createMsg && (
+            <div style={{
+              marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 13,
+              border: `1px solid ${createMsg.ok ? '#1f7a3d' : '#b42318'}`,
+              background: createMsg.ok ? '#f0f9f2' : '#fdf2f2',
+              color: createMsg.ok ? '#14532d' : '#b42318',
+            }}>
+              {createMsg.text}
+            </div>
+          )}
         </div>
       </div>
 
