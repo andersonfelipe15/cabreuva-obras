@@ -1,16 +1,17 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../common/decorators';
 
 class LoginDto {
-  @IsEmail()
+  @IsEmail({}, { message: 'Informe um e-mail válido.' })
+  @IsNotEmpty({ message: 'Informe o e-mail.' })
   email: string;
 
-  @IsString()
-  @MinLength(6)
+  @IsString({ message: 'Informe a senha.' })
+  @IsNotEmpty({ message: 'Informe a senha.' })
   password: string;
 }
 

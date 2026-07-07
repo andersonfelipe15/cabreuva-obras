@@ -28,6 +28,11 @@ export function Login() {
     e.preventDefault();
     setError('');
     setNeedsActivation(false);
+    // Validação clara de campos vazios antes de enviar.
+    if (!email.trim() && !password) { setError('Informe o e-mail e a senha para entrar.'); return; }
+    if (!email.trim()) { setError('Informe o e-mail.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Informe um e-mail válido (ex.: nome@dominio.com).'); return; }
+    if (!password) { setError('Informe a senha.'); return; }
     setLoading(true);
     try {
       await login(email, password);
