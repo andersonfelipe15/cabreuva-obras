@@ -18,6 +18,7 @@ export function AdminUsers() {
   // Mensagens temporárias (somem após 3s) exibidas abaixo dos respectivos botões.
   const [roleMsg, setRoleMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [createMsg, setCreateMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [inviteMsg, setInviteMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [stForm, setStForm] = useState<{ status: string; substituteId: string }>({ status: 'ACTIVE', substituteId: '' });
   const [hist, setHist] = useState<any[]>([]);
@@ -44,8 +45,10 @@ export function AdminUsers() {
   }, [load]);
 
   async function saveInvite() {
-    await run(async () => {
-      if (invForm.id) {
+    try {
+      const editing = !!invForm.id;
+      const nome = invForm.name;
+      if (editing) {
         await api.patch(`/invitations/${invForm.id}`, { name: invForm.name, document: invForm.document, email: invForm.email, type: invForm.type });
       } else {
         const r: any = await api.post('/invitations', { name: invForm.name, document: invForm.document, email: invForm.email, type: invForm.type });
@@ -53,18 +56,30 @@ export function AdminUsers() {
       }
       setInvForm({ id: '', name: '', document: '', email: '', type: 'EXTERNAL' });
       loadInvites();
-    });
+      flash(setInviteMsg, editing ? `Convite de ${nome} atualizado com sucesso.` : `Convite enviado para ${nome} com sucesso.`, true);
+    } catch (e) {
+      flash(setInviteMsg, `Não foi possível salvar o convite: ${(e as Error).message}`, false);
+    }
   }
   async function resendInvite(id: string) {
-    await run(async () => {
+    try {
       const r: any = await api.post(`/invitations/${id}/resend`, {});
       alert('Convite reenviado (simulado).\nNovo link:\n' + r.inviteLink);
       loadInvites();
-    });
+      flash(setInviteMsg, 'Convite reenviado com sucesso.', true);
+    } catch (e) {
+      flash(setInviteMsg, `Não foi possível reenviar: ${(e as Error).message}`, false);
+    }
   }
   async function cancelInvite(id: string) {
     if (!confirm('Cancelar este convite?')) return;
-    await run(async () => { await api.delete(`/invitations/${id}`); loadInvites(); });
+    try {
+      await api.delete(`/invitations/${id}`);
+      loadInvites();
+      flash(setInviteMsg, 'Convite cancelado.', true);
+    } catch (e) {
+      flash(setInviteMsg, `Não foi possível cancelar: ${(e as Error).message}`, false);
+    }
   }
 
   async function run(fn: () => Promise<unknown>) {
@@ -310,6 +325,16 @@ export function AdminUsers() {
           </button>
           {invForm.id && <button className="secondary" onClick={() => setInvForm({ id: '', name: '', document: '', email: '', type: 'EXTERNAL' })}>Cancelar edição</button>}
         </div>
+        {inviteMsg && (
+          <div style={{
+            marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 13,
+            border: `1px solid ${inviteMsg.ok ? '#1f7a3d' : '#b42318'}`,
+            background: inviteMsg.ok ? '#f0f9f2' : '#fdf2f2',
+            color: inviteMsg.ok ? '#14532d' : '#b42318',
+          }}>
+            {inviteMsg.text}
+          </div>
+        )}
         {invites.length > 0 && (
           <table style={{ marginTop: 12 }}>
             <thead><tr><th>Nome</th><th>E-mail</th><th>Tipo</th><th>Status</th><th>Envios</th><th></th></tr></thead>
