@@ -15,7 +15,8 @@ export function AdminUsers() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  // Mensagem da troca de perfil, exibida abaixo do botão "Salvar perfil".
+  const [roleMsg, setRoleMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [stForm, setStForm] = useState<{ status: string; substituteId: string }>({ status: 'ACTIVE', substituteId: '' });
   const [hist, setHist] = useState<any[]>([]);
@@ -86,6 +87,7 @@ export function AdminUsers() {
       setStForm({ status: d.status, substituteId: d.substituteId ?? '' });
       // Um perfil por usuário: usa o primeiro (ou vazio).
       setRoleEdit(d.roles?.[0]?.role.id ?? '');
+      setRoleMsg(null);
     });
     api.get<any[]>(`/users/${id}/history`).then(setHist).catch(() => setHist([]));
   }
@@ -98,16 +100,16 @@ export function AdminUsers() {
   }
   // Salva o perfil (admin/analista/requerente) do usuário — apenas um.
   async function saveRoles() {
-    setError(''); setNotice('');
-    if (!roleEdit) { setError('Selecione um perfil para o usuário.'); return; }
+    setRoleMsg(null);
+    if (!roleEdit) { setRoleMsg({ text: 'Selecione um perfil para o usuário.', ok: false }); return; }
     const roleName = roles.find((r) => r.id === roleEdit)?.name ?? 'novo perfil';
     try {
       await api.patch(`/users/${detail.id}/roles`, { roleIds: [roleEdit] });
-      setNotice(`Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`);
+      setRoleMsg({ text: `Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`, ok: true });
       openDetail(detail.id);
       load();
     } catch (e) {
-      setError(`Não foi possível alterar o perfil: ${(e as Error).message}`);
+      setRoleMsg({ text: `Não foi possível alterar o perfil: ${(e as Error).message}`, ok: false });
     }
   }
 
@@ -115,7 +117,6 @@ export function AdminUsers() {
     <div>
       <h1>Gestão de Usuários</h1>
       {error && <div className="error">{error}</div>}
-      {notice && <div className="card" style={{ borderColor: '#1f7a3d', background: '#f0f9f2' }}>{notice}</div>}
 
       <div className="card">
         <label>Buscar (nome, CPF, e-mail, cargo)</label>
@@ -172,6 +173,16 @@ export function AdminUsers() {
               ))}
             </div>
             <button onClick={saveRoles} disabled={!roleEdit || roleEdit === detail.roles?.[0]?.role.id}>Salvar perfil</button>
+            {roleMsg && (
+              <div style={{
+                marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 13,
+                border: `1px solid ${roleMsg.ok ? '#1f7a3d' : '#b42318'}`,
+                background: roleMsg.ok ? '#f0f9f2' : '#fdf2f2',
+                color: roleMsg.ok ? '#14532d' : '#b42318',
+              }}>
+                {roleMsg.text}
+              </div>
+            )}
           </div>
 
           <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 10 }}>
