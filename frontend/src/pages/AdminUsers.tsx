@@ -15,11 +15,12 @@ export function AdminUsers() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState<any>(null);
   const [stForm, setStForm] = useState<{ status: string; substituteId: string }>({ status: 'ACTIVE', substituteId: '' });
   const [hist, setHist] = useState<any[]>([]);
-  // Edição dos perfis (permissões) de um usuário já cadastrado.
-  const [roleEdit, setRoleEdit] = useState<string[]>([]);
+  // Perfil (permissão) de um usuário já cadastrado — apenas UM por usuário.
+  const [roleEdit, setRoleEdit] = useState<string>('');
   const [newSector, setNewSector] = useState('');
   const [form, setForm] = useState<any>({ name: '', document: '', email: '', cargo: '', password: '', roleIds: [], sectorIds: [] });
 
@@ -83,7 +84,8 @@ export function AdminUsers() {
     api.get<any>(`/users/${id}`).then((d) => {
       setDetail(d);
       setStForm({ status: d.status, substituteId: d.substituteId ?? '' });
-      setRoleEdit((d.roles ?? []).map((r: any) => r.role.id));
+      // Um perfil por usuário: usa o primeiro (ou vazio).
+      setRoleEdit(d.roles?.[0]?.role.id ?? '');
     });
     api.get<any[]>(`/users/${id}/history`).then(setHist).catch(() => setHist([]));
   }
@@ -94,20 +96,26 @@ export function AdminUsers() {
       load();
     });
   }
-  // Salva os perfis (admin/analista/requerente...) do usuário.
+  // Salva o perfil (admin/analista/requerente) do usuário — apenas um.
   async function saveRoles() {
-    if (roleEdit.length === 0) { setError('Selecione ao menos um perfil.'); return; }
-    await run(async () => {
-      await api.patch(`/users/${detail.id}/roles`, { roleIds: roleEdit });
+    setError(''); setNotice('');
+    if (!roleEdit) { setError('Selecione um perfil para o usuário.'); return; }
+    const roleName = roles.find((r) => r.id === roleEdit)?.name ?? 'novo perfil';
+    try {
+      await api.patch(`/users/${detail.id}/roles`, { roleIds: [roleEdit] });
+      setNotice(`Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`);
       openDetail(detail.id);
       load();
-    });
+    } catch (e) {
+      setError(`Não foi possível alterar o perfil: ${(e as Error).message}`);
+    }
   }
 
   return (
     <div>
       <h1>Gestão de Usuários</h1>
       {error && <div className="error">{error}</div>}
+      {notice && <div className="card" style={{ borderColor: '#1f7a3d', background: '#f0f9f2' }}>{notice}</div>}
 
       <div className="card">
         <label>Buscar (nome, CPF, e-mail, cargo)</label>
@@ -151,19 +159,19 @@ export function AdminUsers() {
           <p>Processos na caixa de entrada: {detail.processosNaCaixaEntrada ?? 0} · Protocolados: {detail.processosProtocolados} · Acessados: {detail.processosAcessados}</p>
 
           <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 4 }}>
-            <h3 style={{ marginTop: 0 }}>Perfis / permissões (req. 14-17)</h3>
-            <p className="help" style={{ marginTop: 0 }}>Marque os perfis deste usuário (ex.: Administrador, Analista, Requerente). Um usuário pode acumular mais de um.</p>
+            <h3 style={{ marginTop: 0 }}>Perfil / permissões (req. 14-17)</h3>
+            <p className="help" style={{ marginTop: 0 }}>Selecione o perfil deste usuário. Cada usuário tem apenas <strong>um</strong> perfil (Administrador, Analista ou Requerente).</p>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
               {roles.map((r) => (
                 <label key={r.id} style={{ fontWeight: 400 }}>
-                  <input type="checkbox" style={{ width: 'auto', marginRight: 5 }}
-                    checked={roleEdit.includes(r.id)}
-                    onChange={() => setRoleEdit((s) => toggle(s, r.id))} />
+                  <input type="radio" name="roleEdit" style={{ width: 'auto', marginRight: 5 }}
+                    checked={roleEdit === r.id}
+                    onChange={() => setRoleEdit(r.id)} />
                   {r.name}
                 </label>
               ))}
             </div>
-            <button onClick={saveRoles}>Salvar perfis</button>
+            <button onClick={saveRoles} disabled={!roleEdit || roleEdit === detail.roles?.[0]?.role.id}>Salvar perfil</button>
           </div>
 
           <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 10 }}>
@@ -225,12 +233,12 @@ export function AdminUsers() {
           <div style={{ flex: 1 }}><label>Cargo</label><input value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} /></div>
           <div style={{ flex: 1 }}><label>Senha</label><input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
         </div>
-        <label>Perfis</label>
+        <label>Perfil</label>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {roles.map((r) => (
             <label key={r.id} style={{ fontWeight: 400 }}>
-              <input type="checkbox" style={{ width: 'auto', marginRight: 4 }} checked={form.roleIds.includes(r.id)}
-                onChange={() => setForm({ ...form, roleIds: toggle(form.roleIds, r.id) })} />{r.name}
+              <input type="radio" name="newUserRole" style={{ width: 'auto', marginRight: 4 }} checked={form.roleIds[0] === r.id}
+                onChange={() => setForm({ ...form, roleIds: [r.id] })} />{r.name}
             </label>
           ))}
         </div>

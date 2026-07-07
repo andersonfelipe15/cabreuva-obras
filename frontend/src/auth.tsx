@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api, setToken } from './api';
 
 interface SessionUser {
@@ -27,6 +27,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const raw = localStorage.getItem('user');
     return raw ? JSON.parse(raw) : null;
   });
+
+  // Re-sincroniza os perfis do usuário logado a partir do servidor (fonte da verdade),
+  // para que alterações de perfil feitas pelo admin reflitam ao recarregar a página,
+  // sem precisar deslogar e logar de novo.
+  async function refreshUser() {
+    try {
+      const me = await api.get<any>('/users/me');
+      setUser((prev) => {
+        if (!prev) return prev;
+        const updated: SessionUser = {
+          ...prev,
+          name: me.name ?? prev.name,
+          roles: (me.roles ?? []).map((r: any) => r.role.name),
+          activeRoleId: me.activeRoleId ?? prev.activeRoleId,
+        };
+        localStorage.setItem('user', JSON.stringify(updated));
+        return updated;
+      });
+    } catch {
+      /* token ausente/expirado — ignora silenciosamente */
+    }
+  }
+
+  useEffect(() => {
+    if (localStorage.getItem('user')) refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function login(email: string, password: string) {
     const res = await api.post<{ accessToken: string; user: SessionUser }>(
