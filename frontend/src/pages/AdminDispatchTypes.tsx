@@ -59,6 +59,19 @@ export function AdminDispatchTypes() {
     } catch (e) { setError((e as Error).message); }
   }
 
+  // Exclui um tipo de despacho (o backend recusa se já houver despachos com ele).
+  async function remove(t: DType) {
+    if (!t.id) return;
+    if (!confirm(`Excluir o tipo de despacho "${t.name}"?`)) return;
+    setError(''); setMsg('');
+    try {
+      await api.delete(`/dispatch-types/${t.id}`);
+      setMsg(`Tipo de despacho "${t.name}" excluído.`);
+      if (ed?.id === t.id) setEd(null);
+      load();
+    } catch (e) { setError((e as Error).message); }
+  }
+
   return (
     <div>
       <h1>Tipos de Despacho</h1>
@@ -84,7 +97,10 @@ export function AdminDispatchTypes() {
                   {(t.situations ?? []).length === 0 && <span className="help">—</span>}
                 </td>
                 <td><span className={`badge ${t.enabled ? 'DEFERRED' : 'INDEFERRED'}`}>{t.enabled ? 'Ativo' : 'Inativo'}</span></td>
-                <td><button className="secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => open(t)}>Editar</button></td>
+                <td style={{ display: 'flex', gap: 6 }}>
+                  <button className="secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => open(t)}>Editar</button>
+                  <button className="danger" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => remove(t)}>Excluir</button>
+                </td>
               </tr>
             ))}
           </tbody>
