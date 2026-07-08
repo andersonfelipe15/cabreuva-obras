@@ -129,6 +129,25 @@ export class UsersService {
     return u;
   }
 
+  // Vincula/atualiza os setores em que o usuário atua (req. 82). Pode ter vários.
+  async setSectors(id: string, sectorIds: string[], byId?: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+    const ids = [...new Set((sectorIds ?? []).filter(Boolean))];
+    if (ids.length) {
+      const secs = await this.prisma.sector.findMany({ where: { id: { in: ids } } });
+      if (secs.length !== ids.length) throw new BadRequestException('Setor inválido.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.userSector.deleteMany({ where: { userId: id } }),
+      ...(ids.length
+        ? [this.prisma.userSector.createMany({ data: ids.map((sectorId) => ({ userId: id, sectorId })) })]
+        : []),
+    ]);
+    await this.audit(id, 'SECTORS', byId, { count: ids.length });
+    return this.detail(id);
+  }
+
   // Altera os perfis (permissões) de um usuário já cadastrado (req. 14-17).
   async setRoles(id: string, roleIds: string[], byId?: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });

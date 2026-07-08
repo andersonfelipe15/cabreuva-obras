@@ -24,6 +24,9 @@ export function AdminUsers() {
   const [hist, setHist] = useState<any[]>([]);
   // Perfil (permissão) de um usuário já cadastrado — apenas UM por usuário.
   const [roleEdit, setRoleEdit] = useState<string>('');
+  // Setores em que o usuário atua — pode ter vários.
+  const [sectorEdit, setSectorEdit] = useState<string[]>([]);
+  const [sectorMsg, setSectorMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [newSector, setNewSector] = useState('');
   const [form, setForm] = useState<any>({ name: '', document: '', email: '', cargo: '', password: '', roleIds: [], sectorIds: [] });
 
@@ -125,7 +128,8 @@ export function AdminUsers() {
       setStForm({ status: d.status, substituteId: d.substituteId ?? '' });
       // Um perfil por usuário: usa o primeiro (ou vazio).
       setRoleEdit(d.roles?.[0]?.role.id ?? '');
-      if (!keepMsg) setRoleMsg(null);
+      setSectorEdit((d.sectors ?? []).map((s: any) => s.sector.id));
+      if (!keepMsg) { setRoleMsg(null); setSectorMsg(null); }
     });
     api.get<any[]>(`/users/${id}/history`).then(setHist).catch(() => setHist([]));
   }
@@ -147,6 +151,18 @@ export function AdminUsers() {
       flash(setRoleMsg, `Perfil de ${detail.name} atualizado para "${roleName}" com sucesso. O usuário verá a mudança ao recarregar a página.`, true);
     } catch (e) {
       flash(setRoleMsg, `Não foi possível alterar o perfil: ${(e as Error).message}`, false);
+    }
+  }
+  // Salva os setores em que o usuário atua.
+  async function saveSectors() {
+    try {
+      await api.patch(`/users/${detail.id}/sectors`, { sectorIds: sectorEdit });
+      openDetail(detail.id, true);
+      load();
+      const nomes = sectors.filter((s) => sectorEdit.includes(s.id)).map((s) => s.name).join(', ') || 'nenhum';
+      flash(setSectorMsg, `Setores de ${detail.name} atualizados: ${nomes}.`, true);
+    } catch (e) {
+      flash(setSectorMsg, `Não foi possível salvar os setores: ${(e as Error).message}`, false);
     }
   }
 
@@ -218,6 +234,33 @@ export function AdminUsers() {
                 color: roleMsg.ok ? '#14532d' : '#b42318',
               }}>
                 {roleMsg.text}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid #d8dee4', paddingTop: 10, marginTop: 10 }}>
+            <h3 style={{ marginTop: 0 }}>Setores em que atua (req. 82)</h3>
+            <p className="help" style={{ marginTop: 0 }}>Marque os setores deste usuário. Ele verá na Caixa de Entrada os processos encaminhados a qualquer um deles. Pode marcar vários.</p>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
+              {sectors.map((s) => (
+                <label key={s.id} style={{ fontWeight: 400 }}>
+                  <input type="checkbox" style={{ width: 'auto', marginRight: 5 }}
+                    checked={sectorEdit.includes(s.id)}
+                    onChange={() => setSectorEdit((cur) => toggle(cur, s.id))} />
+                  {s.name}
+                </label>
+              ))}
+              {sectors.length === 0 && <span className="help">Nenhum setor cadastrado.</span>}
+            </div>
+            <button onClick={saveSectors}>Salvar setores</button>
+            {sectorMsg && (
+              <div style={{
+                marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 13,
+                border: `1px solid ${sectorMsg.ok ? '#1f7a3d' : '#b42318'}`,
+                background: sectorMsg.ok ? '#f0f9f2' : '#fdf2f2',
+                color: sectorMsg.ok ? '#14532d' : '#b42318',
+              }}>
+                {sectorMsg.text}
               </div>
             )}
           </div>

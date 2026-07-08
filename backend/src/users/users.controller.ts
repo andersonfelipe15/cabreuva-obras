@@ -75,6 +75,17 @@ export class UsersController {
     return this.service.setRoles(id, roleIds, user.id);
   }
 
+  // Vincula os setores em que o usuário atua (req. 82).
+  @Patch(':id/sectors')
+  @RequirePermissions(PERMISSIONS.USER_MANAGE)
+  setSectors(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body('sectorIds') sectorIds: string[],
+  ) {
+    return this.service.setSectors(id, sectorIds, user.id);
+  }
+
   // Status de ausência (Férias/Viagem/Licença/Desativado) + substituto (req. 13).
   @Patch(':id/status')
   @RequirePermissions(PERMISSIONS.USER_MANAGE)
