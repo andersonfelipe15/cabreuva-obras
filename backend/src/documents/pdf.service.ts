@@ -2,6 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import * as QRCode from 'qrcode';
 
+// Converte texto para o conjunto que a fonte WinAnsi (Helvetica/Times/Courier do pdf-lib)
+// codifica. Sem isso, travessão (–/—), aspas curvas, reticências e o caractere de
+// substituição "�" (0xFFFD, vindo de dados corrompidos) quebram o drawText (erro 500).
+function win(s: unknown): string {
+  return String(s ?? '')
+    .replace(/[‐-―]/g, '-')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/ /g, ' ')
+    .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, '?');
+}
+
 interface DocForPdf {
   number: string;
   type: string;
@@ -42,7 +55,7 @@ export class PdfService {
       size = 11,
       opts: { bold?: boolean; color?: any; x?: number } = {},
     ) => {
-      page.drawText(s, {
+      page.drawText(win(s), {
         x: opts.x ?? margin,
         y,
         size,
@@ -142,7 +155,7 @@ export class PdfService {
       font: bold,
       color: green,
     });
-    page.drawText(`Código validador: ${doc.validationCode}`, {
+    page.drawText(win(`Código validador: ${doc.validationCode}`), {
       x: margin + 120,
       y: y - 38,
       size: 9,
@@ -154,7 +167,7 @@ export class PdfService {
       size: 9,
       font,
     });
-    page.drawText(doc.qrData, {
+    page.drawText(win(doc.qrData), {
       x: margin + 120,
       y: y - 68,
       size: 8,
