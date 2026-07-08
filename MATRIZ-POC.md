@@ -333,6 +333,8 @@ Destaques confirmados com chamada real à API de produção: login/bloqueio, pro
 
 # Roteiro de Simulação (item a item)
 
+> 📋 **Versão detalhada (clique a clique + resultado esperado):** veja [`ROTEIRO-DEMONSTRACAO.md`](./ROTEIRO-DEMONSTRACAO.md).
+
 **Ambiente:** https://app-production-f8bf.up.railway.app · **Logins:** Administrador `admin@cabreuva.sp.gov.br`/`admin123` · Analista `analista@cabreuva.sp.gov.br`/`analista123` · Requerente `requerente@teste.com`/`requerente123`. Os menus de administração (Assuntos, Despachos, Usuários, Perfis, Importar, Notificações) só aparecem para o **Administrador**.
 
 ## 1. Contas, autenticação e login (1–13)
