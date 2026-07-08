@@ -382,7 +382,7 @@ function AreaList({ value, onChange, geo }: { value: any[]; onChange: (v: any[])
   const total = value.reduce((acc, r) => acc + (Number(r.area) || 0), 0);
   return (
     <div>
-      {value.length > 2 && (
+      {value.length >= 2 && (
         <input placeholder="🔎 Buscar quadro por descrição..." value={q}
           onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 6 }} />
       )}

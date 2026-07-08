@@ -235,8 +235,9 @@
 2. Repita para outras partes.
 
 ### 59. Buscar informações de qualquer quadro
-1. No campo **🔎 Buscar quadro por descrição**, digite parte da descrição.
-2. ✅ Esperado: filtra as linhas.
+1. Cadastre **pelo menos 2 quadros** (o campo de busca aparece a partir de 2 linhas).
+2. No campo **🔎 Buscar quadro por descrição** (acima da lista), digite parte da descrição (ex.: `Bloco`).
+3. ✅ Esperado: a lista filtra e mostra só os quadros cuja descrição contém o texto.
 
 ### 60. Quadros na emissão de documentos
 1. Protocole com quadros e deixe o processo ser deferido.
