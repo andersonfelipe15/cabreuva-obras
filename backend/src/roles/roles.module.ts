@@ -1,9 +1,11 @@
-import { Module, Injectable } from '@nestjs/common';
+import { Module, Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -22,6 +24,28 @@ export class SectorsService {
   }
   create(name: string) {
     return this.prisma.sector.create({ data: { name } });
+  }
+  // Exclui um setor, desde que não haja processos/assuntos/movimentos vinculados.
+  // Vínculos de usuários (UserSector) são removidos em cascata pelo schema.
+  async remove(id: string) {
+    const sector = await this.prisma.sector.findUnique({ where: { id } });
+    if (!sector) throw new NotFoundException('Setor não encontrado');
+    const [inbox, respTypes, moves] = await Promise.all([
+      this.prisma.process.count({ where: { currentSectorId: id } }),
+      this.prisma.processType.count({ where: { responsibleSectorId: id } }),
+      this.prisma.processMovement.count({ where: { OR: [{ fromSectorId: id }, { toSectorId: id }] } }),
+    ]);
+    const blockers: string[] = [];
+    if (inbox) blockers.push(`${inbox} processo(s) na caixa deste setor`);
+    if (respTypes) blockers.push(`${respTypes} assunto(s) com este setor como responsável`);
+    if (moves) blockers.push(`${moves} movimentação(ões) no histórico`);
+    if (blockers.length) {
+      throw new BadRequestException(
+        'Não é possível excluir o setor: há ' + blockers.join(', ') + '. Reatribua antes de excluir.',
+      );
+    }
+    await this.prisma.sector.delete({ where: { id } });
+    return { deleted: true };
   }
 }
 
@@ -43,6 +67,12 @@ export class SectorsController {
   @RequirePermissions(PERMISSIONS.PROCESS_TYPE_MANAGE)
   create(@Body('name') name: string) {
     return this.service.create(name);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.SECTOR_MANAGE)
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }
 

@@ -94,6 +94,17 @@ export function AdminUsers() {
   function toggle(list: string[], id: string) {
     return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   }
+  // Exclui um setor (com confirmação). O backend recusa se houver vínculos.
+  async function removeSector(s: Sector) {
+    if (!confirm(`Excluir o setor "${s.name}"?`)) return;
+    setError('');
+    try {
+      await api.delete(`/sectors/${s.id}`);
+      api.get<Sector[]>('/sectors').then(setSectors);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function create() {
     try {
@@ -370,7 +381,17 @@ export function AdminUsers() {
             + Setor
           </button>
         </div>
-        <p className="help">{sectors.map((s) => s.name).join(' · ')}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {sectors.map((s) => (
+            <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #d8dee4', borderRadius: 16, padding: '2px 6px 2px 12px' }}>
+              {s.name}
+              <button className="danger" title="Excluir setor"
+                style={{ padding: '0 7px', fontSize: 13, lineHeight: '20px', borderRadius: 12 }}
+                onClick={() => removeSector(s)}>✕</button>
+            </span>
+          ))}
+          {sectors.length === 0 && <span className="help">Nenhum setor cadastrado.</span>}
+        </div>
       </div>
     </div>
   );

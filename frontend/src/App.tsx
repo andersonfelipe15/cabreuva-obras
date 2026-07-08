@@ -6,6 +6,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ResetPassword } from './pages/ResetPassword';
 import { ActivateAccount } from './pages/ActivateAccount';
+import { AcceptInvite } from './pages/AcceptInvite';
 import { ImportLegacy } from './pages/ImportLegacy';
 import { Notifications } from './pages/Notifications';
 import { AdminDispatchTypes } from './pages/AdminDispatchTypes';
@@ -95,6 +96,7 @@ export function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/redefinir-senha" element={<ResetPassword />} />
       <Route path="/ativar-conta" element={<ActivateAccount />} />
+      <Route path="/aceitar-convite" element={<AcceptInvite />} />
       <Route path="/catalog" element={<Protected><Catalog /></Protected>} />
       <Route path="/protocol/:id" element={<Protected><Protocol /></Protected>} />
       <Route path="/mine" element={<Protected><MyProcesses /></Protected>} />
