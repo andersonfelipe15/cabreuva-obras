@@ -11,7 +11,10 @@ export class FilesService {
   ) {}
 
   async upload(userId: string, file: Express.Multer.File) {
-    const ext = (file.originalname.split('.').pop() || 'bin')
+    // O multer entrega originalname em latin1; reinterpreta como UTF-8 para
+    // preservar acentos (evita "AprovaÃ§Ã£o" no lugar de "Aprovação").
+    const filename = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const ext = (filename.split('.').pop() || 'bin')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 8);
@@ -20,7 +23,7 @@ export class FilesService {
     const rec = await this.prisma.file.create({
       data: {
         key,
-        filename: file.originalname,
+        filename,
         mimeType: file.mimetype,
         size: file.size,
         uploadedById: userId,

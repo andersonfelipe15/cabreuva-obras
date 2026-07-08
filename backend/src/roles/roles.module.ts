@@ -6,6 +6,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -24,6 +25,12 @@ export class SectorsService {
   }
   create(name: string) {
     return this.prisma.sector.create({ data: { name } });
+  }
+  async rename(id: string, name: string) {
+    if (!name || !name.trim()) throw new BadRequestException('Informe o nome do setor.');
+    const sector = await this.prisma.sector.findUnique({ where: { id } });
+    if (!sector) throw new NotFoundException('Setor não encontrado');
+    return this.prisma.sector.update({ where: { id }, data: { name: name.trim() } });
   }
   // Exclui um setor, desde que não haja processos/assuntos/movimentos vinculados.
   // Vínculos de usuários (UserSector) são removidos em cascata pelo schema.
@@ -67,6 +74,12 @@ export class SectorsController {
   @RequirePermissions(PERMISSIONS.PROCESS_TYPE_MANAGE)
   create(@Body('name') name: string) {
     return this.service.create(name);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(PERMISSIONS.SECTOR_MANAGE)
+  rename(@Param('id') id: string, @Body('name') name: string) {
+    return this.service.rename(id, name);
   }
 
   @Delete(':id')
