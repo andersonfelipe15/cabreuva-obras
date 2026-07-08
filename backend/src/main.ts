@@ -21,6 +21,10 @@ function materializeCertFromEnv() {
 async function bootstrap() {
   materializeCertFromEnv();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Documentos enviados à IA vão como base64 no corpo JSON; o limite padrão (100kb)
+  // estoura com PDFs ("request entity too large"). Amplia para 25mb.
+  app.useBodyParser('json', { limit: '25mb' });
+  app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
   app.enableCors();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   // Todas as rotas da API ficam sob /api (o frontend já chama /api/*).

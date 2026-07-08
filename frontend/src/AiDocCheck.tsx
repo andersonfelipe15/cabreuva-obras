@@ -32,10 +32,16 @@ export function AiDocCheck() {
   }
 
   async function onFile(file: File) {
-    setLoading(true);
     setError('');
     setResult(null);
     setFeedback('');
+    // Limite amigável — evita o erro "request entity too large" e orienta o usuário.
+    const MAX_MB = 15;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setError(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite é ${MAX_MB} MB — envie uma imagem ou PDF menor (ex.: só a página do documento).`);
+      return;
+    }
+    setLoading(true);
     try {
       const base64 = await toBase64(file);
       const res = await api.post<any>('/ai/extract', {
