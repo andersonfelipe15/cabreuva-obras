@@ -284,7 +284,7 @@ Pregão Eletrônico 47/2026 — 224 requisitos. Legenda de status:
 | 198 | Detalhes após cancelamento | ✅ | `DocumentLog`/`detail` (testado em produção) |
 | 199 | Tarja "Cancelado" + download | ✅ | `pdf.service` tarja (testado) |
 | 200 | Reversão de cancelamento | ✅ | `action REVERT` (testado) |
-| 201 | Detalhes após reversão | ✅ | `DocumentLog` (testado) |
+| 201 | Detalhes após reversão | ✅ | histórico do documento exibe **data/hora + responsável + justificativa** da reversão (`detail()` resolve o usuário; coluna "Responsável" no front) — testado em produção |
 | 202 | Assinatura digital A1 ICP-Brasil | ✅ | `signature.service` (testado) |
 | 203 | Interface de gestão de assinaturas (lote, PAdES) | ✅ | `/documents/sign-batch` + seleção em lote (testado) |
 | 204 | Minhas/Solicitadas/Todas as assinaturas | ✅ | `/documents/signatures` 3 escopos + abas (testado) |
