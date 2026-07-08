@@ -119,6 +119,18 @@ export function FormBuilder() {
     } catch (e) { setError((e as Error).message); }
   }
 
+  // Exclui um assunto (o backend recusa se houver processos protocolados nele).
+  async function remove(t: PType) {
+    if (!t.id) return;
+    if (!confirm(`Excluir o assunto "${t.name}"? Isso o remove da Carta de Serviços.`)) return;
+    setError(''); setMsg('');
+    try {
+      await api.delete(`/process-types/${t.id}`);
+      setMsg(`Assunto "${t.name}" excluído.`);
+      load();
+    } catch (e) { setError((e as Error).message); }
+  }
+
   if (!ed) {
     return (
       <div>
@@ -136,8 +148,12 @@ export function FormBuilder() {
                 <tr key={t.id}>
                   <td>{t.code}</td><td>{t.name}</td><td>{t.category}</td>
                   <td><span className={`badge ${t.enabled ? 'DEFERRED' : 'INDEFERRED'}`}>{t.enabled ? 'Ativo' : 'Inativo'}</span></td>
-                  <td><button className="secondary" style={{ padding: '2px 8px', fontSize: 12 }}
-                    onClick={() => setEd({ ...t, responsibleSectorId: t.responsibleSectorId ?? '' })}>Editar</button></td>
+                  <td style={{ display: 'flex', gap: 6 }}>
+                    <button className="secondary" style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => setEd({ ...t, responsibleSectorId: t.responsibleSectorId ?? '' })}>Editar</button>
+                    <button className="danger" style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => remove(t)}>Excluir</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

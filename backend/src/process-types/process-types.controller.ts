@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -55,5 +56,11 @@ export class ProcessTypesController {
   @RequirePermissions(PERMISSIONS.PROCESS_TYPE_MANAGE)
   setEnabled(@Param('id') id: string, @Body('enabled') enabled: boolean) {
     return this.service.setEnabled(id, enabled);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.PROCESS_TYPE_MANAGE)
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -60,5 +60,20 @@ export class ProcessTypesService {
 
   setEnabled(id: string, enabled: boolean) {
     return this.prisma.processType.update({ where: { id }, data: { enabled } });
+  }
+
+  // Exclui um assunto. Bloqueia se já houver processos protocolados nele (histórico);
+  // nesse caso, oriente a desabilitar (fica fora da Carta de Serviços) em vez de excluir.
+  async remove(id: string) {
+    await this.findOne(id);
+    const used = await this.prisma.process.count({ where: { processTypeId: id } });
+    if (used > 0) {
+      throw new BadRequestException(
+        `Não é possível excluir: há ${used} processo(s) protocolado(s) neste assunto. ` +
+          'Desative o assunto (fica fora da Carta de Serviços) em vez de excluir.',
+      );
+    }
+    await this.prisma.processType.delete({ where: { id } });
+    return { deleted: true };
   }
 }
