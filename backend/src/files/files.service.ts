@@ -19,10 +19,12 @@ export class FilesService {
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 8);
     const key = `${randomUUID()}.${ext}`;
+    // Persiste no storage (disco/S3) e também no banco (à prova de disco efêmero).
     await this.storage.put(key, file.buffer, file.mimetype);
     const rec = await this.prisma.file.create({
       data: {
         key,
+        data: file.buffer,
         filename,
         mimeType: file.mimetype,
         size: file.size,
@@ -40,7 +42,17 @@ export class FilesService {
   async getWithBytes(id: string) {
     const rec = await this.prisma.file.findUnique({ where: { id } });
     if (!rec) throw new NotFoundException('Arquivo não encontrado');
-    const buffer = await this.storage.get(rec.key);
+    // Prioriza os bytes do banco; cai para o storage só se não houver (registros antigos).
+    let buffer: Buffer | null = rec.data ? Buffer.from(rec.data) : null;
+    if (!buffer) {
+      try {
+        buffer = await this.storage.get(rec.key);
+      } catch {
+        throw new NotFoundException(
+          'Conteúdo do anexo indisponível (arquivo antigo perdido em redeploy). Reenvie o arquivo.',
+        );
+      }
+    }
     return { rec, buffer };
   }
 }

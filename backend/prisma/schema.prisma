@@ -462,7 +462,10 @@ model ScheduledAction {
 // Arquivo armazenado (disco local ou S3/MinIO).
 model File {
   id           String   @id @default(uuid())
-  key          String // chave no storage
+  key          String // chave no storage (disco/S3) — mantida por compatibilidade
+  // Conteúdo do arquivo persistido no banco. No Railway o disco é efêmero (some no
+  // redeploy); guardar os bytes no Postgres garante que anexos sobrevivam.
+  data         Bytes?
   filename     String
   mimeType     String
   size         Int

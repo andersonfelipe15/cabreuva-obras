@@ -112,7 +112,9 @@
       "Bash(python -c \"import sys,json;print\\(json.load\\(sys.stdin\\)['message']\\)\")",
       "Bash(gh --version)",
       "Bash(gh auth *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(grep -niE \"migrate|prisma|CMD|ENTRYPOINT|start\" Dockerfile)",
+      "Bash(cat railway.json)"
     ]
   }
 }
