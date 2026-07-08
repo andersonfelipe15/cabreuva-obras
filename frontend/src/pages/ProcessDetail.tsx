@@ -13,6 +13,7 @@ interface Detail {
   id: string;
   number: string;
   status: string;
+  currentSectorId?: string | null;
   formData: Record<string, unknown>;
   processType: { name: string; accessLevel?: string; processActions?: string[]; analysisChecklist?: { items: ChecklistItem[] } };
   requester: { id: string; name: string; document: string; email: string };
@@ -125,6 +126,7 @@ export function ProcessDetail() {
   const [sectors, setSectors] = useState<{ id: string; name: string }[]>([]);
   const [fwdSector, setFwdSector] = useState('');
   const [fwdNote, setFwdNote] = useState('');
+  const [notice, setNotice] = useState('');
   const [shareSectors, setShareSectors] = useState<string[]>([]);
   const [correctable, setCorrectable] = useState<string[]>([]);
   const [zipSel, setZipSel] = useState<string[]>([]);
@@ -182,13 +184,16 @@ export function ProcessDetail() {
       {isStaff && canInteract && actionOn('FORWARD') && (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Tramitação</h2>
+          <p className="help" style={{ marginTop: 0 }}>
+            Setor atual: <strong>{sectors.find((s) => s.id === p.currentSectorId)?.name ?? '—'}</strong>
+          </p>
           {/* Encaminhamento unilateral a um setor (req. 80) */}
           <div className="row" style={{ alignItems: 'flex-end' }}>
             <div style={{ flex: 2 }}>
               <label>Encaminhar para o setor</label>
               <select value={fwdSector} onChange={(e) => setFwdSector(e.target.value)}>
                 <option value="">Selecione...</option>
-                {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {sectors.filter((s) => s.id !== p.currentSectorId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div style={{ flex: 2 }}>
@@ -196,10 +201,26 @@ export function ProcessDetail() {
               <input value={fwdNote} onChange={(e) => setFwdNote(e.target.value)} />
             </div>
             <button disabled={!fwdSector}
-              onClick={() => run(async () => { await api.post(`/processes/${id}/forward`, { toSectorId: fwdSector, note: fwdNote }); setFwdSector(''); setFwdNote(''); })}>
+              onClick={() => run(async () => {
+                const nome = sectors.find((s) => s.id === fwdSector)?.name ?? 'outro setor';
+                await api.post(`/processes/${id}/forward`, { toSectorId: fwdSector, note: fwdNote });
+                setFwdSector(''); setFwdNote('');
+                setNotice(`Processo encaminhado para "${nome}".`);
+                setTimeout(() => setNotice(''), 4000);
+              })}>
               Encaminhar
             </button>
           </div>
+          {sectors.filter((s) => s.id !== p.currentSectorId).length === 0 && (
+            <p className="help" style={{ color: '#b45309', marginTop: 8 }}>
+              Não há outro setor para encaminhar — só existe o setor atual. Cadastre novos setores em <strong>Usuários → Setores</strong> (perfil Administrador).
+            </p>
+          )}
+          {notice && (
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, background: '#f0f9f2', border: '1px solid #1f7a3d', fontSize: 13 }}>
+              ✅ {notice}
+            </div>
+          )}
 
           {/* Ciência a múltiplas partes (req. 81) */}
           <label style={{ marginTop: 12 }}>Dar ciência a vários setores</label>
