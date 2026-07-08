@@ -184,7 +184,16 @@ export class DocumentsService {
       },
     });
     if (!doc) throw new NotFoundException('Documento não encontrado');
-    return doc;
+    // Resolve o usuário responsável de cada log (data/hora + usuário + justificativa) — req. 198/201.
+    const byIds = [...new Set(doc.logs.map((l) => l.byId).filter(Boolean))];
+    const users = byIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: byIds } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(users.map((u) => [u.id, u.name]));
+    return {
+      ...doc,
+      logs: doc.logs.map((l) => ({ ...l, byName: nameById.get(l.byId) ?? '—' })),
+    };
   }
 
   // Ações do ciclo de vida (req. 196-201).

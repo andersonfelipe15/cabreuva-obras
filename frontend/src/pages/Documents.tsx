@@ -7,7 +7,7 @@ interface Doc {
   validUntil?: string | null; createdAt: string; chancelado: boolean;
   process: { number: string }; emittedBy: { name: string };
 }
-interface Log { id: string; action: string; reason?: string | null; createdAt: string }
+interface Log { id: string; action: string; reason?: string | null; createdAt: string; byName?: string | null }
 
 const LABEL: Record<string, string> = {
   VALID: 'Vigente', SUSPENDED: 'Suspenso', CANCELLED: 'Cancelado', REVOKED: 'Cassado',
@@ -223,12 +223,17 @@ export function Documents() {
 
             <h3 style={{ marginTop: 16 }}>Histórico do documento</h3>
             <table>
-              <thead><tr><th>Data</th><th>Ação</th><th>Justificativa</th></tr></thead>
+              <thead><tr><th>Data/hora</th><th>Ação</th><th>Responsável</th><th>Justificativa</th></tr></thead>
               <tbody>
                 {logs.map((l) => (
-                  <tr key={l.id}><td style={{ fontSize: 12 }}>{new Date(l.createdAt).toLocaleString('pt-BR')}</td><td>{l.action}</td><td>{l.reason}</td></tr>
+                  <tr key={l.id}>
+                    <td style={{ fontSize: 12 }}>{new Date(l.createdAt).toLocaleString('pt-BR')}</td>
+                    <td>{l.action}</td>
+                    <td>{l.byName ?? '—'}</td>
+                    <td>{l.reason}</td>
+                  </tr>
                 ))}
-                {logs.length === 0 && <tr><td colSpan={3} className="help">Sem histórico.</td></tr>}
+                {logs.length === 0 && <tr><td colSpan={4} className="help">Sem histórico.</td></tr>}
               </tbody>
             </table>
           </div>
