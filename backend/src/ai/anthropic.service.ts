@@ -86,13 +86,27 @@ export class AnthropicService {
       'Responda EXCLUSIVAMENTE com um JSON válido (sem markdown, sem texto extra), ' +
       `exatamente neste formato:\n${schemaHint}`;
 
-    const res = await client.messages.create({
-      model: this.model,
-      max_tokens: 1500,
-      messages: [
-        { role: 'user', content: [docBlock, { type: 'text', text: instruction }] },
-      ],
-    });
+    let res;
+    try {
+      res = await client.messages.create({
+        model: this.model,
+        max_tokens: 1500,
+        messages: [
+          { role: 'user', content: [docBlock, { type: 'text', text: instruction }] },
+        ],
+      });
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      // Documento grande demais ou com páginas em excesso (limites da API de IA).
+      if (/page|too large|maximum|size|request_too_large|32 ?mb|100 pages/i.test(msg)) {
+        return {
+          erro:
+            'Não foi possível analisar: o documento é grande demais ou tem páginas em excesso. ' +
+            'Envie apenas a página do documento (RG, CNH, matrícula, etc.), com no máximo ~100 páginas e 25 MB.',
+        };
+      }
+      return { erro: 'Falha ao analisar o documento com a IA: ' + msg };
+    }
 
     const text = (res.content as any[])
       .filter((b) => b.type === 'text')
